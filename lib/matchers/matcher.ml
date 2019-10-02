@@ -10,6 +10,10 @@ open Types
 let configuration_ref = ref (Configuration.create ())
 let weaken_delimiter_hole_matching = false
 
+let reverse_parser_ref = ref false
+
+let do_not_call_tighten = ref false
+
 let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
@@ -128,7 +132,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     (many1 comment_parser << spaces >>= fun result -> f result)
 
   let sequence_chain (plist : ('c, Match.t) parser sexp_list) : ('c, Match.t) parser =
-    List.fold plist ~init:(return Unit) ~f:(>>)
+    if !reverse_parser_ref then
+      List.fold_right plist ~init:(return Unit) ~f:(>>)
+    else
+      List.fold plist ~init:(return Unit) ~f:(>>)
 
   let with_debug_matcher s tag =
     if debug then
@@ -759,9 +766,11 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     in
     first' shift p source
 
-  let all ?configuration ~template ~source:original_source : Match.t list =
+  let rec all ?configuration ~template ~source:original_source : Match.t list =
     let open Or_error in
     configuration_ref := Option.value configuration ~default:!configuration_ref;
+    configuration_ref := { !configuration_ref with tight_matching = true };
+    let configuration = Some !configuration_ref in
     let make_result = function
       | Ok ok -> ok
       | Error _ -> []
@@ -790,6 +799,36 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       (* TODO(RVT): reintroduce nested matches *)
       let compute_nested_matches matches = matches in
       let matches = compute_nested_matches matches in
-      return matches
+      match configuration with
+      | Some { tight_matching = true; _ } ->
+        if !do_not_call_tighten then
+          return matches
+        else
+          begin
+            do_not_call_tighten := true;
+            Format.printf "Calling tighten@.";
+            let tightened = tighten ?configuration template matches in
+            return tightened
+          end
+      | _ -> return matches
     end
+  and tighten ?configuration template matches =
+    reverse_parser_ref := true;
+    let res =
+      List.map matches ~f:(fun (({ matched; _ }) as m) ->
+          let tight_match =
+            let rev_matched = String.rev matched in
+            Format.printf "Revved: %s@." rev_matched;
+            match all ?configuration ~template ~source:rev_matched with
+            | [] ->
+              Format.printf "nop@.";
+              m
+            | hd :: _ ->
+              Format.printf "yep@.";
+              hd
+          in
+          tight_match)
+    in
+    reverse_parser_ref := false;
+    res
 end

@@ -430,3 +430,20 @@ let%expect_test "trivial_empty_case" =
       print_string (Yojson.Safe.to_string (Match.to_yojson hd))
   end;
   [%expect_exact {|{"range":{"start":{"offset":0,"line":1,"column":1},"end":{"offset":0,"line":1,"column":1}},"environment":[],"matched":""}|}]
+
+let%expect_test "tight_matching" =
+  let configuration = Configuration.create ~tight_matching:true ~match_kind:Fuzzy () in
+  let run = run_all ~configuration in
+
+  let source = {|
+    if (c) { stuff; }
+    if (c) stuff;
+|}
+  in
+  let match_template = "if (:[c]) :[stuff];" in
+  let rewrite_template = "if (:[c]) :[stuff];" in
+  run source match_template rewrite_template;
+  [%expect_exact {|
+    if (c) { stuff; }
+    if (c) stuff;
+|}]
