@@ -27,8 +27,7 @@ module Omega = struct
         ((string M.delimiter *> (many_till char_token_s (string M.delimiter))
           |>> String.concat)
          >>= fun result ->
-         return (Format.sprintf {|%s%s|} M.delimiter result)
-         (* unlike Alpha, do not suffix the ending delimiter, it was captured by the delimiter parser in many_till *)
+         return (Format.sprintf {|%s%s%s|} M.delimiter result M.delimiter)
         )
     end
   end

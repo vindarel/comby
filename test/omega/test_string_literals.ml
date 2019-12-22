@@ -1,4 +1,4 @@
-(*open Core
+open Core
 
 open Matchers
 open Rewriter
@@ -70,6 +70,8 @@ let%expect_test "base_literal_matching" =
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
   [%expect_exact {|hello|}]
+
+(*
 
 let%expect_test "base_literal_matching" =
   let source = {|rewrite ("hello") this string|} in
@@ -410,4 +412,5 @@ let%expect_test "match_escaped_escaped" =
       | Some { rewritten_source; _ } -> print_string rewritten_source
       | None -> print_string "EXPECT SUCCESS");
   [%expect_exact {|EXPECT SUCCESS|}]
-  *)
+
+   *)
