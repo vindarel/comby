@@ -219,6 +219,26 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let many1_till p t =
     lift2 cons p (many_till p t)
 
+  (* this thing is wrapped by a many. also rename it to 'string hole match syntax per char' *)
+  let escapable_literal_grammar ~right_delimiter =
+    match Syntax.escapable_string_literals with
+    | None -> zero
+    | Some { escape_character; _ } ->
+      (* escape of ending char *)
+      (attempt
+         (char escape_character
+          *> string right_delimiter
+          >>= fun s -> return (Format.sprintf "%c%s" escape_character s))
+      )
+      <|>
+      (* escape of escape char *)
+      (attempt
+         (char escape_character
+          *> char escape_character
+          *> return (Format.sprintf "%c%c" escape_character escape_character))
+      )
+      <|> (any_char_except ~reserved:[right_delimiter] |>> String.of_char)
+
   let sequence_chain (p_list : (production * 'a) t list) =
     let i = ref 0 in
     List.fold_right p_list ~init:(return (Unit, acc)) ~f:(fun p acc ->
@@ -228,7 +248,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
           | Error _ ->
             if debug then Format.printf "Composing p with terminating parser@.";
             p *> acc
-          | Ok (Hole { sort; identifier; _ }, user_state) ->
+          | Ok (Hole { sort; identifier; dimension; _ }, user_state) ->
             (*Format.printf "Ok.@.";*)
             begin
               match sort with
@@ -261,7 +281,14 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 let hole_matcher =
                   (many_till
                      (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
-                      generate_everything_hole_parser ())
+                      (match dimension with
+                       | Code -> generate_everything_hole_parser ()
+                       | Escapable_string_literal ->
+                         (* FIXME hardcoded delimiter *)
+                         escapable_literal_grammar ~right_delimiter:"\""
+                       | _ -> failwith "Unimplemented for comment and raw"
+                      )
+                     )
                      (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
                       until)
                      (* it may be that the many till for the first parser
