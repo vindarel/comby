@@ -258,7 +258,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                     (if debug then Format.printf "Yes this second case@.";
                      acc >>= fun _ -> return ())
                 in
-                let pparser =
+                let hole_matcher =
                   (many_till
                      (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
                       generate_everything_hole_parser ())
@@ -267,12 +267,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      (* it may be that the many till for the first parser
                         succeeds on 'empty string', specifically in the :[1]:[2]
                         case for :[1]. We won't capture the pos of :[1] in the
-                        first parser since it doesn't fire, so, so we have to
+                        first parser since it doesn't fire, so we have to
                         set the pos right before the until parser below, if that
                         happens. *)
                   ) >>| String.concat
                 in
-                pparser >>= fun text ->
+                hole_matcher >>= fun text ->
                 (*Format.printf "have results %d@." @@ List.length results;*)
                 let offset =
                   match Set_once.get first_pos with
@@ -332,7 +332,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let single_hole_parser () =
     string ":[[" *> identifier_parser () <* string "]]"
 
-  let greedy_hole_parser () =
+  let everything_hole_parser () =
     string ":[" *> identifier_parser () <* string "]"
 
   let many1_till p t =
@@ -344,7 +344,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let hole_parser =
       match sort with
       | Alphanum -> single_hole_parser ()
-      | Everything -> greedy_hole_parser ()
+      | Everything -> everything_hole_parser ()
       | _ -> failwith "not implemented"
     in
     let skip_signal hole = skip_unit (string "_signal_hole") |>> fun () -> (Hole hole, acc) in
