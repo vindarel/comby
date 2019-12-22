@@ -19,7 +19,6 @@ let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
 
-
 let record_match_context pos_before pos_after =
   let open Match.Location in
   if debug then Format.printf "match context start pos: %d@." pos_before;
@@ -30,7 +29,8 @@ let record_match_context pos_before pos_after =
     String.slice source match_start match_end
   in
   let match_context =
-    (* set line/column to what we would get in alpha. we compute line/col in pipeline.ml. this can be done here later *)
+    (* set line/column to what we would get in alpha. we compute line/col in
+       pipeline.ml. this can be done here later *)
     let match_start = { offset = pos_before; line = 1; column = pos_before + 1 } in
     let match_end = { offset = pos_after; line = 1; column = pos_after + 1 } in
     Match.
@@ -74,6 +74,19 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       current_environment_ref := environment;
       return (Unit, acc)
     | _ -> return (Unit, acc)
+
+  let alphanum =
+    satisfy (function
+        | 'a' .. 'z'
+        | 'A' .. 'Z'
+        | '0' .. '9' -> true
+        | _ -> false)
+
+  let is_whitespace = function
+    | ' ' | '\t' | '\r' | '\n' -> true
+    | _ -> false
+
+  let blank = is_whitespace
 
   let between left right p =
     left *> p <* right
@@ -126,17 +139,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     |> function
     | Some until -> until
     | None -> assert false
-
-  let alphanum =
-    satisfy (function
-        | 'a' .. 'z'
-        | 'A' .. 'Z'
-        | '0' .. '9' -> true
-        | _ -> false)
-
-  let is_whitespace = function
-    | ' ' | '\t' | '\r' | '\n' -> true
-    | _ -> false
 
   let reserved_delimiters =
     List.concat_map Syntax.user_defined_delimiters ~f:(fun (from, until) -> [from; until])
