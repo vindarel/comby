@@ -75,19 +75,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       return (Unit, acc)
     | _ -> return (Unit, acc)
 
-  let alphanum =
-    satisfy (function
-        | 'a' .. 'z'
-        | 'A' .. 'Z'
-        | '0' .. '9' -> true
-        | _ -> false)
-
-  let is_whitespace = function
-    | ' ' | '\t' | '\r' | '\n' -> true
-    | _ -> false
-
-  let blank = is_whitespace
-
   let between left right p =
     left *> p <* right
 
@@ -173,6 +160,23 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     | `End_of_input -> any_char
     | `Reserved_sequence -> fail "reserved sequence hit"
 
+  let alphanum =
+    satisfy (function
+        | 'a' .. 'z'
+        | 'A' .. 'Z'
+        | '0' .. '9' -> true
+        | _ -> false)
+
+  let is_whitespace = function
+    | ' ' | '\t' | '\r' | '\n' -> true
+    | _ -> false
+
+  let blank =
+    choice
+      [ char ' '
+      ; char '\t'
+      ]
+
   let generate_single_hole_parser () =
     (alphanum <|> char '_') |>> String.of_char
 
@@ -224,20 +228,11 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     match Syntax.escapable_string_literals with
     | None -> zero
     | Some { escape_character; _ } ->
-      (* escape of ending char *)
-      (attempt
-         (char escape_character
-          *> string right_delimiter
-          >>= fun s -> return (Format.sprintf "%c%s" escape_character s))
-      )
-      <|>
-      (* escape of escape char *)
-      (attempt
-         (char escape_character
-          *> char escape_character
-          *> return (Format.sprintf "%c%c" escape_character escape_character))
-      )
-      <|> (any_char_except ~reserved:[right_delimiter] |>> String.of_char)
+      choice
+        [ (string (Format.sprintf "%c%s" escape_character right_delimiter))
+        ; (string (Format.sprintf "%c%c" escape_character escape_character))
+        ; (any_char_except ~reserved:[right_delimiter] |>> String.of_char)
+        ]
 
   let sequence_chain (p_list : (production * 'a) t list) =
     let i = ref 0 in
@@ -362,6 +357,19 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let everything_hole_parser () =
     string ":[" *> identifier_parser () <* string "]"
 
+  let non_space_hole_parser () =
+    string ":[" *> identifier_parser () <* string ".]"
+
+  let line_hole_parser () =
+    string ":[" *> identifier_parser () <* string "\\n]"
+
+  let blank_hole_parser () =
+    string ":[" *>
+    (many1 blank)
+    *> identifier_parser () >>= fun identifier ->
+    string "]" *>
+    return identifier
+
   let many1_till p t =
     let cons x xs = x::xs in
     lift2 cons p (many_till p t)
@@ -372,14 +380,40 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       match sort with
       | Alphanum -> single_hole_parser ()
       | Everything -> everything_hole_parser ()
-      | _ -> failwith "not implemented"
+      | Blank -> blank_hole_parser ()
+      | Line -> line_hole_parser ()
+      | Non_space -> non_space_hole_parser ()
     in
     let skip_signal hole = skip_unit (string "_signal_hole") |>> fun () -> (Hole hole, acc) in
     hole_parser |>> fun identifier -> skip_signal { sort; identifier; dimension; optional = false }
 
   (* FIXME add hole matching. *)
   let generate_hole_for_literal ~contents ~left_delimiter:_ ~right_delimiter:_ () =
+    (* convert all the holes to parsers and specify the Escapable_string_literal dimension *)
     generate_string_token_parser contents
+(*
+    let holes =
+      Hole.sorts ()
+      |> List.map ~f:(fun kind -> hole_parser kind Escapable_string_literal)
+      |> choice
+    in
+    let parser =
+      many
+        (choice
+           [ holes
+           ; ((many1 (any_char_except ~reserved) |>> String.of_char_list)
+              |>> generate_string_token_parser)
+           ]
+        )
+    in
+    match parse_string parser contents with
+    | Ok parsers -> sequence_chain parsers
+    | Error _ ->
+      failwith "If this failure happens it is a bug: Converting a \
+                quoted string in the template to a parser list should \
+                not fail here"
+*)
+
 
   let general_parser_generator : (production * 'a) t t =
     fix (fun (generator : (production * 'a) t list t) ->
