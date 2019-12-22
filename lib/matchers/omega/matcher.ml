@@ -350,6 +350,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let skip_signal hole = skip_unit (string "_signal_hole") |>> fun () -> (Hole hole, acc) in
     hole_parser |>> fun identifier -> skip_signal { sort; identifier; dimension; optional = false }
 
+  (* FIXME add hole matching. *)
+  let generate_hole_for_literal ~contents ~left_delimiter:_ ~right_delimiter:_ () =
+    generate_string_token_parser contents
+
   let general_parser_generator : (production * 'a) t t =
     fix (fun (generator : (production * 'a) t list t) ->
         if debug then Format.printf "Descends@.";
@@ -378,11 +382,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
 
         let escapable_string_literal_parser : (production * 'a) t t =
-          (* FIXME add hole matching *)
-          escapable_string_literal_parser
-            (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
-          >>| fun string_literal_contents ->
-          generate_string_token_parser string_literal_contents
+          escapable_string_literal_parser (generate_hole_for_literal ())
         in
         let other =
           (* XXX many1_till would be cool, but it also parses the thing that
