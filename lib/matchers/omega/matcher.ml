@@ -390,7 +390,26 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   (* FIXME add hole matching. *)
   let generate_hole_for_literal ~contents ~left_delimiter:_ ~right_delimiter:_ () =
     (* convert all the holes to parsers and specify the Escapable_string_literal dimension *)
-    generate_string_token_parser contents
+    (*generate_string_token_parser contents*)
+
+    (* the parser has to not consume contents that are part of hole syntax.
+       everythign else is OK. We can't just do 'all reserved', that's dumb, only
+       the hole syntax matters *)
+    let parser =
+      many @@
+      choice [
+        hole_parser Alphanum Escapable_string_literal
+      ; hole_parser Everything Escapable_string_literal (* FIXME: others besides Escapable *)
+      ; ((many1 (any_char_except ~reserved:[":["]) |>> String.of_char_list) (*FIXME: others besdies :[ *)
+         |>> generate_string_token_parser)
+      ]
+    in
+    match parse_string parser contents with
+    | Ok parsers -> sequence_chain parsers
+    | Error _ ->
+      failwith "If this failure happens it is a bug: Converting a \
+                quoted string in the template to a parser list should \
+                not fail here"
 (*
     let holes =
       Hole.sorts ()

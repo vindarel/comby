@@ -23,7 +23,10 @@ let vars (env : t) : string list =
 let add ?(range = Range.default) (env : t) (var : string) (value : string) : t =
   Map.add env ~key:var ~data:{ value; range }
   |> function
-  | `Duplicate -> env
+    (* I added the case to overwrite the next key if it already exists for omega
+       matcher because we use mutable there. We can also do this change there
+       instead of here if it scews things up *)
+  | `Duplicate -> Map.change env var ~f:(fun _ -> Some {value; range})
   | `Ok env -> env
 
 let lookup (env : t) (var : string) : string option =
