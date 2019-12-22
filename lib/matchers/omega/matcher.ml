@@ -30,12 +30,9 @@ let record_match_context pos_before pos_after =
     String.slice source match_start match_end
   in
   let match_context =
-    let match_start =
-      { default with offset = pos_before }
-    in
-    let match_end =
-      { default with offset = pos_after }
-    in
+    (* set line/column to what we would get in alpha. we compute line/col in pipeline.ml. this can be done here later *)
+    let match_start = { offset = pos_before; line = 1; column = pos_before + 1 } in
+    let match_end = { offset = pos_after; line = 1; column = pos_after + 1 } in
     Match.
       { range = { match_start; match_end }
       ; environment = !current_environment_ref
@@ -56,17 +53,22 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
 
   let r acc production : (production * 'a) t =
     let open Match in
+    let open Location in
     let open Range in
     let acc = f acc production in
     match production with
     | String s ->
       if debug then Format.printf "Matched String: %S@." s;
       return (Unit, acc)
-    | Match { offset = pos_after; identifier; text = content } ->
+    | Match { offset = pos_begin; identifier; text = content } ->
       (* using just pos after for now, because thats what we do in matcher. lol *)
-      if debug then Format.printf "Match: %S @@ %d for %s@." content pos_after identifier;
-      let before = Location.default in (* FIXME *)
-      let after = { Location.default with offset = pos_after } in
+      if debug then Format.printf "Match: %S @@ %d for %s@." content pos_begin identifier;
+      (* we do what alpha matcher does here, which is make the match on one line
+         and add offset. In pipeline, we convert to line/col. This can be fixed
+         later. *)
+      let before = { offset = pos_begin; line = 1; column = pos_begin + 1 } in
+      let pos_after_offset = pos_begin + String.length content in
+      let after = { offset = pos_after_offset; line = 1; column = pos_after_offset + 1 } in
       let range = { match_start = before; match_end = after } in
       let environment = Environment.add ~range !current_environment_ref identifier content in
       current_environment_ref := environment;

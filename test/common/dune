@@ -2,6 +2,7 @@
  (name common_test_integration)
  (modules
   test_generic
+  test_c_style_comments
   test_nested_comments
   test_c
   test_bash

@@ -41,10 +41,11 @@ module Omega = struct
     end
   end
 
-  (* XXX consumes the newline *)
+  (* Consumes the newline if we don't reintroduce it. This can be improved, we
+     shouldn't need to reintroduce it.*)
   let until_newline start =
     (string start *> anything_excluding_newlines ()
-     |>> fun l -> start^(String.of_char_list l))
+     |>> fun l -> start^(String.of_char_list l)^"\n")
 
   module Until_newline = struct
     module type S = sig
