@@ -115,7 +115,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
           | Nested_multiline (_, _) -> zero) (* FIXME unimplemented nested multiline comments *)
       |> choice
 
-  let escapable_string_literal_parser =
+  type 'a literal_parser_callback = contents:string -> left_delimiter:string -> right_delimiter:string -> 'a
+
+  let escapable_string_literal_parser (f : 'a literal_parser_callback) =
     (match Syntax.escapable_string_literals with
      | None -> []
      | Some { delimiters; escape_character } ->
@@ -129,8 +131,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
            M.base_string_literal >>= fun contents ->
            (* FIXME figure out if we need to do the same callback thing here to communicate
               forward that we entered a string *)
-           return contents
-         ))
+           return (f ~contents ~left_delimiter:delimiter ~right_delimiter:delimiter)))
     |> choice
 
   let until_of_from from =
@@ -175,7 +176,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let generate_single_hole_parser () =
     (alphanum <|> char '_') |>> String.of_char
 
-  let generate_greedy_hole_parser
+  let generate_everything_hole_parser
       ?priority_left_delimiter:left_delimiter
       ?priority_right_delimiter:right_delimiter
       () =
@@ -205,6 +206,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         choice
           [ comment_parser
           ; escapable_string_literal_parser
+              (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
           ; delimsx
           ; other
           ])
@@ -259,7 +261,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 let pparser =
                   (many_till
                      (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
-                      generate_greedy_hole_parser ())
+                      generate_everything_hole_parser ())
                      (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
                       until)
                      (* it may be that the many till for the first parser
@@ -374,11 +376,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
           |> choice
         in
         let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
+
         let escapable_string_literal_parser : (production * 'a) t t =
+          (* FIXME add hole matching *)
           escapable_string_literal_parser
+            (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
           >>| fun string_literal_contents ->
-          (* FIXME incomplete likely, may need info about delims. also, no hole
-             matching yet. *)
           generate_string_token_parser string_literal_contents
         in
         let other =
@@ -425,7 +428,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
        contexts". We only care about the 1 case anyway, so... *)
     let prefix =
       skip_unit comment_parser
-      <|> skip_unit escapable_string_literal_parser
+      <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
       <|> skip_unit any_char
     in
     many (skip_unit
