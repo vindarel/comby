@@ -119,6 +119,18 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
            return (f ~contents ~left_delimiter:delimiter ~right_delimiter:delimiter)))
     |> choice
 
+  let raw_string_literal_parser (f : 'a literal_parser_callback) =
+    List.map Syntax.raw_string_literals ~f:(fun (left_delimiter, right_delimiter) ->
+        let module M =
+          Parsers.String_literals.Omega.Raw.Make(struct
+            let left_delimiter = left_delimiter
+            let right_delimiter = right_delimiter
+          end)
+        in
+        M.base_string_literal >>= fun contents ->
+        return (f ~contents ~left_delimiter ~right_delimiter))
+    |> choice
+
   let until_of_from from =
     Syntax.user_defined_delimiters
     |> List.find_map ~f:(fun (from', until) -> if from = from' then Some until else None)
@@ -232,6 +244,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         ; (any_char_except ~reserved:[right_delimiter] |>> String.of_char)
         ]
 
+  let raw_literal_grammar ~right_delimiter =
+    any_char_except ~reserved:[right_delimiter] |>> String.of_char
+
   let sequence_chain ?left_delimiter:_ ?right_delimiter (p_list : (production * 'a) t list) =
     let i = ref 0 in
     List.fold_right p_list ~init:(return (Unit, acc)) ~f:(fun p acc ->
@@ -279,7 +294,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                        | Escapable_string_literal ->
                          let right_delimiter = Option.value_exn right_delimiter in
                          escapable_literal_grammar ~right_delimiter
-                       | _ -> failwith "Unimplemented for comment and raw"
+                       | Raw_string_literal ->
+                         let right_delimiter = Option.value_exn right_delimiter in
+                         escapable_literal_grammar ~right_delimiter
+                       | _ -> failwith "Unimplemented for comment"
                       )
                      )
                      (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
@@ -386,21 +404,21 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     hole_parser |>> fun identifier -> skip_signal { sort; identifier; dimension; optional = false }
 
   (* FIXME add hole matching. *)
-  let generate_hole_for_literal ~contents ~left_delimiter:_ ~right_delimiter () =
+  let generate_hole_for_literal sort ~contents ~left_delimiter ~right_delimiter () =
     let parser =
       many @@
       choice
         [
           (* FIXME: others besides Alphanum and Everything *)
-          hole_parser Alphanum Escapable_string_literal
-        ; hole_parser Everything Escapable_string_literal
-        (*FIXME: others besdies :[ *)
+          hole_parser Alphanum sort
+        ; hole_parser Everything sort
+        (*FIXME: others besides :[ *)
         ; ((many1 (any_char_except ~reserved:[":["]) |>> String.of_char_list)
            |>> generate_string_token_parser)
         ]
     in
     match parse_string parser contents with
-    | Ok parsers -> sequence_chain ~right_delimiter parsers
+    | Ok parsers -> sequence_chain ~left_delimiter ~right_delimiter parsers
     | Error _ ->
       failwith "If this failure happens it is a bug: Converting a \
                 quoted string in the template to a parser list should \
@@ -457,7 +475,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
 
         let escapable_string_literal_parser : (production * 'a) t t =
-          escapable_string_literal_parser (generate_hole_for_literal ())
+          escapable_string_literal_parser (generate_hole_for_literal Escapable_string_literal ())
+        in
+        let raw_string_literal_parser : (production * 'a) t t =
+          raw_string_literal_parser (generate_hole_for_literal Raw_string_literal ())
         in
         let other =
           (* XXX many1_till would be cool, but it also parses the thing that
@@ -484,6 +505,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         choice
           [ hole_parser Alphanum Code
           ; hole_parser Everything Code
+          ; raw_string_literal_parser
           ; escapable_string_literal_parser
           ; spaces
           ; nested
@@ -504,6 +526,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let prefix =
       skip_unit comment_parser
       <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+      <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
       <|> skip_unit any_char
     in
     many (skip_unit

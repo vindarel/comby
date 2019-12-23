@@ -293,8 +293,6 @@ let%expect_test "rewrite_string_literals_8" =
   |> print_string;
   [%expect_exact {|match \'|}]
 
-(*
-
 let%expect_test "go_raw_string_literals" =
   let source =
     {|
@@ -330,6 +328,8 @@ let%expect_test "go_raw_string_literals" =
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
   [%expect_exact {|blah `(` quux|}]
+
+(*
 
 let%expect_test "match_string_literals" =
   let source = {|`(` match `(``(` this `(` |} in
