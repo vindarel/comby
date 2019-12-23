@@ -8,7 +8,6 @@
   test_integration
   test_statistics
   test_cli
-  test_string_literals
   test_special_matcher_cases
   test_rewrite_rule
   test_server
