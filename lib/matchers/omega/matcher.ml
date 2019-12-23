@@ -219,6 +219,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         (* FIXME holes does not handle space here, but does in alpha *)
         choice
           [ comment_parser
+          ; raw_string_literal_parser
+              (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
           ; escapable_string_literal_parser
               (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
           ; delimsx
@@ -525,8 +527,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
        contexts". We only care about the 1 case anyway, so... *)
     let prefix =
       skip_unit comment_parser
-      <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
       <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+      <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
       <|> skip_unit any_char
     in
     many (skip_unit

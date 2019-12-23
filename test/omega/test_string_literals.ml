@@ -329,8 +329,6 @@ let%expect_test "go_raw_string_literals" =
   |> print_string;
   [%expect_exact {|blah `(` quux|}]
 
-(*
-
 let%expect_test "match_string_literals" =
   let source = {|`(` match `(``(` this `(` |} in
   let match_template = {|match :[1] this|} in
@@ -411,4 +409,3 @@ let%expect_test "match_escaped_escaped" =
       | Some { rewritten_source; _ } -> print_string rewritten_source
       | None -> print_string "EXPECT SUCCESS");
   [%expect_exact {|EXPECT SUCCESS|}]
-*)
