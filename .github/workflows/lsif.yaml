@@ -15,13 +15,18 @@ jobs:
       - run: opam depext -yt comby
       - run: opam install -t . --deps-only
       - run: opam exec -- dune build
-#     - name: Generate LSIF data
-#       uses: rvantonder/lsif-ocaml-action@master # TODO
+#     - name: Generate LSIF data # TODO. Use https://help.github.com/en/actions/automating-your-workflow-with-github-actions/creating-a-docker-container-action
+#       uses: rvantonder/lsif-ocaml-action@master
 #       with:
 #           verbose: 'true'
-#     - name: Upload LSIF data
-#       uses: sourcegraph/lsif-upload-action@master
-#       continue-on-error: true
-#       with:
-#         endpoint: https://sourcegraph.com
-#         github_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: opam pin add -y merlin-lsif https://github.com/rvantonder/merlin.git\#lsif
+      - run: opam pin add -y lsif-ocaml https://github.com/rvantonder/lsif-ocaml.git
+      - run: opam config exec -- lsif-ocaml-dump
+      - run: opam config exec -- lsif-ocaml -only-type-hovers > dump.lsif
+      - name: Upload LSIF data
+        uses: sourcegraph/lsif-upload-action@master
+        continue-on-error: true
+        with:
+          endpoint: https://sourcegraph.com
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dump.lsif
