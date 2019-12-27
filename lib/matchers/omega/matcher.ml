@@ -284,10 +284,29 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      { offset = pos_before; identifier; text = (String.concat value) }
                   )
               | Non_space ->
+                let first_pos = Set_once.create () in
+                let until =
+                  (* if this is the base case (the first time we go around the
+                     loop backwards, when the first parser is a hole), then it
+                     means there's a hole at the end without anything following
+                     it in the template. So it should always match to
+                     end_of_input (not empty string) *)
+                  if !i = 0 then
+                    (if debug then Format.printf "Yes this case@.";
+                     end_of_input)
+                  else
+                    (if debug then Format.printf "Yes this second case@.";
+                     acc >>= fun _ -> return ())
+                in
                 pos >>= fun pos_before ->
-                many1 (any_char_except ~reserved)
+                many1_till
+                  (
+                    pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                    (* TODO: dimension? cf. Everything hole *)
+                    any_char_except ~reserved
+                  ) (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                     until)
                 >>= fun value ->
-                acc >>= fun _ ->
                 r user_state
                   (Match
                      { offset = pos_before; identifier; text = (String.of_char_list value) }
