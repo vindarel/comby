@@ -283,6 +283,35 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                   (Match
                      { offset = pos_before; identifier; text = (String.concat value) }
                   )
+              | Non_space ->
+                pos >>= fun pos_before ->
+                many1 (any_char_except ~reserved)
+                >>= fun value ->
+                acc >>= fun _ ->
+                r user_state
+                  (Match
+                     { offset = pos_before; identifier; text = (String.of_char_list value) }
+                  )
+              | Line ->
+                pos >>= fun pos_before ->
+                let allowed =
+                  many (any_char_except ~reserved:["\n"])
+                  |>> fun x -> [(String.of_char_list x)^"\n"]
+                in
+                allowed <* char '\n' >>= fun value ->
+                acc >>= fun _ ->
+                r user_state
+                  (Match
+                     { offset = pos_before; identifier; text = (String.concat value) }
+                  )
+              | Blank ->
+                pos >>= fun pos_before ->
+                many1 blank >>= fun value ->
+                acc >>= fun _ ->
+                r user_state
+                  (Match
+                     { offset = pos_before; identifier; text = (String.of_char_list value) }
+                  )
               | Everything ->
                 if debug then Format.printf "do hole %s@." identifier;
                 let first_pos = Set_once.create () in
@@ -337,7 +366,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      ; identifier
                      ; text
                      })
-              | _ -> assert false (* TODO: other sorts *)
             end
           | Ok (_, _user_state) -> failwith "unreachable: _signal_hole parsed but not handled by Hole variant"
         in
