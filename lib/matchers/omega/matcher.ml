@@ -170,6 +170,16 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     | `End_of_input -> any_char
     | `Reserved_sequence -> fail "reserved sequence hit"
 
+
+  let any_char_except_parser p =
+    let rewind = ref false in
+    let set_rewind v = rewind := v in
+    let get_rewind () = !rewind in
+    choice
+      [ (p >>= fun _ -> (return (set_rewind true)) >>= fun _ -> fail "bad")
+      ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else any_char)
+      ]
+
   let alphanum =
     satisfy (function
         | 'a' .. 'z'
