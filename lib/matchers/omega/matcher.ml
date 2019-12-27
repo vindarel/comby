@@ -178,6 +178,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     choice
       [ (p >>= fun _ -> (return (set_rewind true)) >>= fun _ -> fail "bad")
       ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else any_char)
+        (* TODO this needs some kind of EOF condition to work for both template and match parsing *)
       ]
 
   let alphanum =
@@ -417,14 +418,16 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
 
   (* FIXME add hole matching. *)
   let generate_hole_for_literal sort ~contents ~left_delimiter ~right_delimiter () =
+    let literal_holes =
+      Hole.sorts ()
+      |> List.map ~f:(fun kind -> hole_parser kind sort) (* Uses attempt in alpha *)
+      |> choice
+    in
     let parser =
       many @@
       choice
-        [
-          (* FIXME: others besides Alphanum and Everything *)
-          hole_parser Alphanum sort
-        ; hole_parser Everything sort
-        (*FIXME: others besides :[ *)
+        [ literal_holes
+        (*FIXME: unhardcode *)
         ; ((many1 (any_char_except ~reserved:[":["]) |>> String.of_char_list)
            |>> generate_string_token_parser)
         ]
@@ -435,29 +438,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       failwith "If this failure happens it is a bug: Converting a \
                 quoted string in the template to a parser list should \
                 not fail here"
-(*
-    let holes =
-      Hole.sorts ()
-      |> List.map ~f:(fun kind -> hole_parser kind Escapable_string_literal)
-      |> choice
-    in
-    let parser =
-      many
-        (choice
-           [ holes
-           ; ((many1 (any_char_except ~reserved) |>> String.of_char_list)
-              |>> generate_string_token_parser)
-           ]
-        )
-    in
-    match parse_string parser contents with
-    | Ok parsers -> sequence_chain parsers
-    | Error _ ->
-      failwith "If this failure happens it is a bug: Converting a \
-                quoted string in the template to a parser list should \
-                not fail here"
-*)
-
 
   let general_parser_generator : (production * 'a) t t =
     fix (fun (generator : (production * 'a) t list t) ->
@@ -513,10 +493,14 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
            contain something then and can't be empty *)
         (* don't want it to be many because empty string will satisfy and
            "" is a valid template, or even "{", because it generates 'seq' on chain *)
+        let code_holes =
+          Hole.sorts ()
+          |> List.map ~f:(fun kind -> hole_parser kind Code) (* Uses attempt in alpha *)
+          |> choice
+        in
         many @@
         choice
-          [ hole_parser Alphanum Code
-          ; hole_parser Everything Code
+          [ code_holes
           ; raw_string_literal_parser
           ; escapable_string_literal_parser
           ; spaces
@@ -531,7 +515,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     p_list
     |> sequence_chain
     |> fun matcher ->
-    (* FIXME: skip_unit needs to be raw literals *)
     (* XXX: what is the difference does many vs many1 make here? Semantically,
        it should mean "0 or more matching contexts" vs "1 or more matching
        contexts". We only care about the 1 case anyway, so... *)
