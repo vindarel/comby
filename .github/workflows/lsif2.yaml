@@ -1,4 +1,4 @@
-name: Docker build
+name: LSIF2
 on:
   - push
 jobs:
@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Generate LSIF data
-        uses: rvatnonder/lsif-ocaml-action@master
+        uses: rvantonder/lsif-ocaml-action@master
         with:
           verbose: 'true'
       - name: Upload LSIF data
