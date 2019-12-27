@@ -416,11 +416,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let skip_signal hole = skip_unit (string "_signal_hole") |>> fun () -> (Hole hole, acc) in
     hole_parser |>> fun identifier -> skip_signal { sort; identifier; dimension; optional = false }
 
-  (* FIXME add hole matching. *)
   let generate_hole_for_literal sort ~contents ~left_delimiter ~right_delimiter () =
     let literal_holes =
       Hole.sorts ()
-      |> List.map ~f:(fun kind -> hole_parser kind sort) (* Uses attempt in alpha *)
+      |> List.map ~f:(fun kind -> hole_parser kind sort) (* Note: Uses attempt in alpha *)
       |> choice
     in
     let parser =
