@@ -1,0 +1,19 @@
+name: Docker build
+on:
+  - push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Generate LSIF data
+        uses: rvatnonder/lsif-ocaml-action@master
+        with:
+          verbose: 'true'
+      - name: Upload LSIF data
+        uses: sourcegraph/lsif-upload-action@master
+        continue-on-error: true
+        with:
+            endpoint: https://sourcegraph.com
+            github_token: ${{ secrets.GITHUB_TOKEN }}
+            file: 'data.lsif'
