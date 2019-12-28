@@ -1,11 +1,11 @@
-(*open Core
+open Core
 
 open Lwt.Infix
 
 open Match
 open Server_types
 
-let binary_path = "../../../comby-server"
+let binary_path = "../../../../comby-server"
 
 let port = "9991"
 
@@ -202,4 +202,3 @@ let%expect_test "post_substitute" =
   [%expect {| { "result": "oh hi there", "id": 0 } |}]
 
 let () = kill ()
-*)
