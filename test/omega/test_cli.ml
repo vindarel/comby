@@ -252,7 +252,7 @@ let%expect_test "json_output_option" =
   let result = read_expect_stdin_and_stdout command source in
   print_string result;
   [%expect_exact {|{"uri":null,"rewritten_source":"c X a c Y a","in_place_substitutions":[{"range":{"start":{"offset":6,"line":-1,"column":-1},"end":{"offset":11,"line":-1,"column":-1}},"replacement_content":"c Y a","environment":[{"variable":"1","value":"Y","range":{"start":{"offset":2,"line":-1,"column":-1},"end":{"offset":3,"line":-1,"column":-1}}}]},{"range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"c X a","environment":[{"variable":"1","value":"X","range":{"start":{"offset":2,"line":-1,"column":-1},"end":{"offset":3,"line":-1,"column":-1}}}]}],"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-a X c a Y c\n\\ No newline at end of file\n+c X a c Y a\n\\ No newline at end of file"}
-|}];
+|}](*; 1.
 
   let source = "a X c a Y c" in
   let match_template = "a :[1] c" in
@@ -265,7 +265,7 @@ let%expect_test "json_output_option" =
   let result = read_expect_stdin_and_stdout command source in
   print_string result;
   [%expect_exact {|{"uri":null,"matches":[{"range":{"start":{"offset":0,"line":1,"column":1},"end":{"offset":5,"line":1,"column":6}},"environment":[{"variable":"1","value":"X","range":{"start":{"offset":2,"line":1,"column":3},"end":{"offset":3,"line":1,"column":4}}}],"matched":"a X c"},{"range":{"start":{"offset":6,"line":1,"column":7},"end":{"offset":11,"line":1,"column":12}},"environment":[{"variable":"1","value":"Y","range":{"start":{"offset":8,"line":1,"column":9},"end":{"offset":9,"line":1,"column":10}}}],"matched":"a Y c"}]}
-|}]
+|}]*)
 
 let with_zip f =
   let file = Filename.temp_file "comby_" ".zip" in
@@ -663,6 +663,7 @@ let%expect_test "matcher_override" =
   print_string result;
   [%expect{| |}]
 
+(* 2.
 let%expect_test "infer_and_honor_extensions" =
   let source = "doesn't matter" in
   let src_dir = "example" ^/ "src" ^/ "honor-file-extensions" in
@@ -696,6 +697,7 @@ let%expect_test "infer_and_honor_extensions" =
      }
 
     WARNING: the GENERIC matcher was used, because a language could not be inferred from the file extension(s). The GENERIC matcher may miss matches. See '-list' to set a matcher for a specific language and to remove this warning. |}]
+   *)
 
 let%expect_test "diff_only" =
   let source = "hello world" in
@@ -882,6 +884,7 @@ let%expect_test "unrecognized_matcher" =
   [%expect_exact {|The matcher "invalid" is not supported. See -list for supported matchers
 |}]
 
+(* 3.
 let%expect_test "generic_matcher_ok" =
   let source = {|dont care|} in
   let match_template = "dont care" in
@@ -899,7 +902,9 @@ let%expect_test "generic_matcher_ok" =
 [0;41;30m-|[0m[0m[0;31mdont care[0m[0m
 [0;42;30m+|[0m[0m[0;32mblah[0m[0m
 |}]
+   *)
 
+(* 4.
 let%expect_test "warn_on_anonymous_and_templates_flag" =
   let source = "(fun i -> j) (fun x -> x)" in
   let command_args =
@@ -911,6 +916,7 @@ let%expect_test "warn_on_anonymous_and_templates_flag" =
   [%expect_exact {|(fun i -> j) identWARNING: Templates specified on the command line AND using -templates. Ignoring match
       and rewrite templates on the command line and only using those in directories.
 |}]
+   *)
 
 let%expect_test "dump_stats" =
   let source = {|dont care|} in
