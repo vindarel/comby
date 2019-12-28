@@ -592,12 +592,15 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     |> fun matcher ->
     match !configuration_ref.match_kind with
     | Exact ->
-      (pos >>= fun start_pos ->
-       matcher >>= fun _access_last_production_herpe ->
-       pos >>= fun end_pos ->
-       record_match_context start_pos end_pos;
-       current_environment_ref := Match.Environment.create ();
-       r acc Unit)
+      (
+        pos >>= fun start_pos ->
+        if debug then Format.printf "Yes exact@.";
+        matcher >>= fun _access_last_production_here ->
+        pos >>= fun end_pos ->
+        end_of_input >>= fun _ ->
+        record_match_context start_pos end_pos;
+        current_environment_ref := Match.Environment.create ();
+        r acc Unit)
     | Fuzzy ->
       (* XXX: what is the difference does many vs many1 make here? Semantically,
          it should mean "0 or more matching contexts" vs "1 or more matching
@@ -619,7 +622,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                    else
                      (* we found a match *)
                      pos >>= fun start_pos ->
-                     matcher >>= fun _access_last_production_herpe ->
+                     matcher >>= fun _access_last_production_here ->
                      pos >>= fun end_pos ->
                      record_match_context start_pos end_pos;
                      current_environment_ref := Match.Environment.create ();
