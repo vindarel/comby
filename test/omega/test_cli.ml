@@ -884,7 +884,6 @@ let%expect_test "unrecognized_matcher" =
   [%expect_exact {|The matcher "invalid" is not supported. See -list for supported matchers
 |}]
 
-(* 3.
 let%expect_test "generic_matcher_ok" =
   let source = {|dont care|} in
   let match_template = "dont care" in
@@ -902,9 +901,7 @@ let%expect_test "generic_matcher_ok" =
 [0;41;30m-|[0m[0m[0;31mdont care[0m[0m
 [0;42;30m+|[0m[0m[0;32mblah[0m[0m
 |}]
-   *)
 
-(* 4.
 let%expect_test "warn_on_anonymous_and_templates_flag" =
   let source = "(fun i -> j) (fun x -> x)" in
   let command_args =
@@ -916,7 +913,6 @@ let%expect_test "warn_on_anonymous_and_templates_flag" =
   [%expect_exact {|(fun i -> j) identWARNING: Templates specified on the command line AND using -templates. Ignoring match
       and rewrite templates on the command line and only using those in directories.
 |}]
-   *)
 
 let%expect_test "dump_stats" =
   let source = {|dont care|} in

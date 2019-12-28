@@ -70,7 +70,16 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       let pos_after_offset = pos_begin + String.length content in
       let after = { offset = pos_after_offset; line = 1; column = pos_after_offset + 1 } in
       let range = { match_start = before; match_end = after } in
-      let environment = Environment.add ~range !current_environment_ref identifier content in
+      let environment =
+        if Environment.exists !current_environment_ref identifier then
+          let fresh_hole_id =
+            (* FIXME: get rid of UUID *)
+            Format.sprintf "%s_%s_equal" Uuid_unix.(Fn.compose Uuid.to_string create ()) identifier
+          in
+          Environment.add ~range !current_environment_ref fresh_hole_id content
+        else
+          Environment.add ~range !current_environment_ref identifier content
+      in
       current_environment_ref := environment;
       return (Unit, acc)
     | _ -> return (Unit, acc)
