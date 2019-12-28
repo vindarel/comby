@@ -1,4 +1,4 @@
-name: LSIF2
+name: LSIF
 on:
   - push
 jobs:
