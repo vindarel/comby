@@ -1,4 +1,4 @@
-name: LSIF2
+name: LSIF
 on:
   - push
 jobs:
@@ -17,14 +17,14 @@ jobs:
       - run: opam pin add -y merlin-lsif https://github.com/rvantonder/merlin.git\#lsif
       - run: opam pin add -y lsif-ocaml https://github.com/rvantonder/lsif-ocaml.git
       - run: opam exec -- dune build
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v1
-#     - run: opam exec -- lsif-ocaml-dump
+#     - name: Setup tmate session
+#       uses: mxschmitt/action-tmate@v1
+      - run: opam exec -- lsif-ocaml-dump
       - run: opam exec -- lsif-ocaml -only-type-hovers > dump.lsif
-#     - name: Upload LSIF data
-#       uses: sourcegraph/lsif-upload-action@master
-#       continue-on-error: true
-#       with:
-#         endpoint: https://sourcegraph.com
-#         github_token: ${{ secrets.GITHUB_TOKEN }}
-#         file: dump.lsif
+      - name: Upload LSIF data
+        uses: sourcegraph/lsif-upload-action@master
+        continue-on-error: true
+        with:
+          endpoint: https://sourcegraph.com
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dump.lsif
