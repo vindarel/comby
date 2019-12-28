@@ -1,8 +1,8 @@
-(*open Core
+open Core
 
 module Time = Core_kernel.Time_ns.Span
 
-let binary_path = "../../../comby"
+let binary_path = "../../../../comby"
 
 let read_with_timeout read_from_channels =
   let read_from_fds = List.map ~f:Unix.descr_of_in_channel read_from_channels in
@@ -63,7 +63,7 @@ let%expect_test "json_lines_separates_by_line" =
   let command = Format.sprintf "%s %s" binary_path command_args in
   let result = read_expect_stdin_and_stdout command source in
   print_string result;
-  [%expect_exact {|{"uri":null,"rewritten_source":"helli wirld","in_place_substitutions":[{"range":{"start":{"offset":7,"line":-1,"column":-1},"end":{"offset":8,"line":-1,"column":-1}},"replacement_content":"i","environment":[]},{"range":{"start":{"offset":4,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"i","environment":[]}],"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-hello world\n+helli wirld"}
+  [%expect_exact {|{"uri":null,"rewritten_source":"helli wirld","in_place_substitutions":[{"range":{"start":{"offset":7,"line":-1,"column":-1},"end":{"offset":8,"line":-1,"column":-1}},"replacement_content":"i","environment":[]},{"range":{"start":{"offset":4,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"i","environment":[]}],"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-hello world\n\\ No newline at end of file\n+helli wirld\n\\ No newline at end of file"}
 |}]
 
 let%expect_test "json_lines_json_pretty_do_not_output_when_diff_null" =
@@ -185,7 +185,7 @@ let%expect_test "with_match_rule" =
 
 let%expect_test "with_rewrite_rule" =
   let source = "hello world" in
-  let match_template = ":[2] :[1]" in
+  let match_template = ":[[2]] :[[1]]" in
   let rewrite_template = ":[1]" in
   let rule = {|where rewrite :[1] { ":[_]" -> ":[2]" }|} in
   let command_args =
@@ -203,7 +203,7 @@ let%expect_test "with_rewrite_rule" =
 
 let%expect_test "with_rewrite_rule_stdin_default_no_extension" =
   let source = "hello world" in
-  let match_template = ":[2] :[1]" in
+  let match_template = ":[[2]] :[[1]]" in
   let rewrite_template = ":[1]" in
   let rule = {|where rewrite :[1] { ":[_]" -> ":[2]" }|} in
   let command_args =
@@ -251,7 +251,7 @@ let%expect_test "json_output_option" =
   let command = Format.sprintf "%s %s" binary_path command_args in
   let result = read_expect_stdin_and_stdout command source in
   print_string result;
-  [%expect_exact {|{"uri":null,"rewritten_source":"c X a c Y a","in_place_substitutions":[{"range":{"start":{"offset":6,"line":-1,"column":-1},"end":{"offset":11,"line":-1,"column":-1}},"replacement_content":"c Y a","environment":[{"variable":"1","value":"Y","range":{"start":{"offset":2,"line":-1,"column":-1},"end":{"offset":3,"line":-1,"column":-1}}}]},{"range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"c X a","environment":[{"variable":"1","value":"X","range":{"start":{"offset":2,"line":-1,"column":-1},"end":{"offset":3,"line":-1,"column":-1}}}]}],"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-a X c a Y c\n+c X a c Y a"}
+  [%expect_exact {|{"uri":null,"rewritten_source":"c X a c Y a","in_place_substitutions":[{"range":{"start":{"offset":6,"line":-1,"column":-1},"end":{"offset":11,"line":-1,"column":-1}},"replacement_content":"c Y a","environment":[{"variable":"1","value":"Y","range":{"start":{"offset":2,"line":-1,"column":-1},"end":{"offset":3,"line":-1,"column":-1}}}]},{"range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"c X a","environment":[{"variable":"1","value":"X","range":{"start":{"offset":2,"line":-1,"column":-1},"end":{"offset":3,"line":-1,"column":-1}}}]}],"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-a X c a Y c\n\\ No newline at end of file\n+c X a c Y a\n\\ No newline at end of file"}
 |}];
 
   let source = "a X c a Y c" in
@@ -264,7 +264,8 @@ let%expect_test "json_output_option" =
   let command = Format.sprintf "%s %s" binary_path command_args in
   let result = read_expect_stdin_and_stdout command source in
   print_string result;
-  [%expect_exact {|{"uri":null,"matches":[{"range":{"start":{"offset":0,"line":1,"column":1},"end":{"offset":5,"line":1,"column":6}},"environment":[{"variable":"1","value":"X","range":{"start":{"offset":2,"line":1,"column":3},"end":{"offset":3,"line":1,"column":4}}}],"matched":"a X c"},{"range":{"start":{"offset":6,"line":1,"column":7},"end":{"offset":11,"line":1,"column":12}},"environment":[{"variable":"1","value":"Y","range":{"start":{"offset":8,"line":1,"column":9},"end":{"offset":9,"line":1,"column":10}}}],"matched":"a Y c"}]}|}]
+  [%expect_exact {|{"uri":null,"matches":[{"range":{"start":{"offset":0,"line":1,"column":1},"end":{"offset":5,"line":1,"column":6}},"environment":[{"variable":"1","value":"X","range":{"start":{"offset":2,"line":1,"column":3},"end":{"offset":3,"line":1,"column":4}}}],"matched":"a X c"},{"range":{"start":{"offset":6,"line":1,"column":7},"end":{"offset":11,"line":1,"column":12}},"environment":[{"variable":"1","value":"Y","range":{"start":{"offset":8,"line":1,"column":9},"end":{"offset":9,"line":1,"column":10}}}],"matched":"a Y c"}]}
+|}]
 
 let with_zip f =
   let file = Filename.temp_file "comby_" ".zip" in
@@ -299,7 +300,7 @@ let%expect_test "list_languages" =
  -matcher .html     HTML      
  -matcher .hs       Haskell   
  -matcher .java     Java      
- -matcher .js       Javascript/Typescript
+ -matcher .js       Javascript
  -matcher .json     JSON      
  -matcher .jl       Julia     
  -matcher .kt       Kotlin    
@@ -318,6 +319,7 @@ let%expect_test "list_languages" =
  -matcher .sql      SQL       
  -matcher .swift    Swift     
  -matcher .txt      Text      
+ -matcher .ts       Typescript
  -matcher .xml      XML       
  -matcher .generic  Generic   
 |}]
@@ -325,7 +327,7 @@ let%expect_test "list_languages" =
 
 let%expect_test "patdiff_and_zip" =
   with_zip (fun file ->
-      let match_template = ":[2] :[1]" in
+      let match_template = ":[[2]] :[[1]]" in
       let rewrite_template = ":[1]" in
       let command_args =
         Format.sprintf "'%s' '%s' .ml -sequential -json-lines -zip %s"
@@ -334,7 +336,7 @@ let%expect_test "patdiff_and_zip" =
       let command = Format.sprintf "%s %s" binary_path command_args in
       let result = read_output command in
       print_string result;
-      [%expect_exact {|{"uri":"main.ml","rewritten_source":"world","in_place_substitutions":[{"range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"world","environment":[{"variable":"1","value":"world","range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}}}]}],"diff":"--- main.ml\n+++ main.ml\n@@ -1,1 +1,1 @@\n-hello world\n+world"}
+      [%expect_exact {|{"uri":"main.ml","rewritten_source":"world","in_place_substitutions":[{"range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}},"replacement_content":"world","environment":[{"variable":"1","value":"world","range":{"start":{"offset":0,"line":-1,"column":-1},"end":{"offset":5,"line":-1,"column":-1}}}]}],"diff":"--- main.ml\n+++ main.ml\n@@ -1,1 +1,1 @@\n-hello world\n\\ No newline at end of file\n+world\n\\ No newline at end of file"}
 |}]
     )
 
@@ -411,7 +413,9 @@ let%expect_test "diff_option" =
 +++ /dev/null
 @@ -1,1 +1,1 @@
 -a X c a Y c
+\ No newline at end of file
 +c X a c Y a
+\ No newline at end of file
 |}]
 
 let%expect_test "stdout_option" =
@@ -700,7 +704,7 @@ let%expect_test "diff_only" =
   let result = read_expect_stdin_and_stdout command source in
   print_string result;
   [%expect{|
-    {"uri":null,"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-hello world\n+world world"}
+    {"uri":null,"diff":"--- /dev/null\n+++ /dev/null\n@@ -1,1 +1,1 @@\n-hello world\n\\ No newline at end of file\n+world world\n\\ No newline at end of file"}
 
     WARNING: the GENERIC matcher was used, because a language could not be inferred from the file extension(s). The GENERIC matcher may miss matches. See '-list' to set a matcher for a specific language and to remove this warning. |}];
 
@@ -800,8 +804,9 @@ let%expect_test "print_single_line_matches" =
   let command = Format.sprintf "%s %s" binary_path command_args in
   read_expect_stdin_and_stdout command source
   |> print_string;
-  [%expect_exact {|let ()
-let ()
+  [%expect_exact {|2:let ()
+3:let ()
+
 |}]
 
 let%expect_test "print_multi_line_matches" =
@@ -823,9 +828,10 @@ in
   let command = Format.sprintf "%s %s" binary_path command_args in
   read_expect_stdin_and_stdout command source
   |> print_string;
-  [%expect_exact {|let ()
-let\n\n    ()
-let ()
+  [%expect_exact {|2:let ()
+3:let\n\n    ()
+7:let ()
+
 |}];
 
   let command_args =
@@ -836,6 +842,7 @@ let ()
   read_expect_stdin_and_stdout command source
   |> print_string;
   [%expect_exact {|3 matches
+
 |}];
 
   let command_args =
@@ -845,7 +852,8 @@ let ()
   let command = Format.sprintf "%s %s" binary_path command_args in
   read_expect_stdin_and_stdout command source
   |> print_string;
-  [%expect_exact {|{"uri":null,"matches":[{"range":{"start":{"offset":5,"line":1,"column":6},"end":{"offset":11,"line":1,"column":12}},"environment":[],"matched":"let ()"},{"range":{"start":{"offset":23,"line":1,"column":24},"end":{"offset":34,"line":3,"column":7}},"environment":[],"matched":"let\n\n    ()"},{"range":{"start":{"offset":42,"line":1,"column":43},"end":{"offset":48,"line":1,"column":49}},"environment":[],"matched":"let ()"}]}WARNING: -count and -json-lines is specified. Ignoring -count.
+  [%expect_exact {|{"uri":null,"matches":[{"range":{"start":{"offset":5,"line":2,"column":5},"end":{"offset":11,"line":2,"column":11}},"environment":[],"matched":"let ()"},{"range":{"start":{"offset":23,"line":3,"column":5},"end":{"offset":34,"line":5,"column":7}},"environment":[],"matched":"let\n\n    ()"},{"range":{"start":{"offset":42,"line":7,"column":5},"end":{"offset":48,"line":7,"column":11}},"environment":[],"matched":"let ()"}]}
+WARNING: -count and -json-lines is specified. Ignoring -count.
 |}];
 
   let command_args =
@@ -856,6 +864,7 @@ let ()
   read_expect_stdin_and_stdout command source
   |> print_string;
   [%expect_exact {|3 matches
+
 WARNING: -count only works with -match-only. Performing -match-only -count.
 |}]
 
@@ -942,4 +951,113 @@ let%expect_test "substitute_ok" =
   |> print_string;
   [%expect_exact {|hole_1 hole_2
 |}]
-  *)
+
+let%expect_test "diff_patches_with_trailing_newlines" =
+  let source = "dont care" in
+
+  let src_dir = "example" ^/ "diff-no-newlines" ^/ "1" in
+  let match_template = "1" in
+  let rewrite_template = "2" in
+
+  let command_args = Format.sprintf "'%s' '%s' -diff -f a -d %s -matcher .txt " match_template rewrite_template src_dir in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect_exact {|--- example/diff-no-newlines/1/a
++++ example/diff-no-newlines/1/a
+@@ -1,1 +1,1 @@
+-1
+\ No newline at end of file
++2
+\ No newline at end of file
+|}];
+
+  let src_dir = "example" ^/ "diff-no-newlines" ^/ "2" in
+  let command_args = Format.sprintf "'%s' '%s' -diff -f a -d %s -matcher .txt " match_template rewrite_template src_dir in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect_exact {|--- example/diff-no-newlines/2/a
++++ example/diff-no-newlines/2/a
+@@ -1,2 +1,2 @@
+-1
+-1
+\ No newline at end of file
++2
++2
+\ No newline at end of file
+|}];
+
+  let src_dir = "example" ^/ "diff-no-newlines" ^/ "3" in
+  let command_args = Format.sprintf "'%s' '%s' -diff -f a -d %s -matcher .txt " match_template rewrite_template src_dir in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect_exact {|--- example/diff-no-newlines/3/a
++++ example/diff-no-newlines/3/a
+@@ -1,2 +1,2 @@
+-1
++2
+ 2
+\ No newline at end of file
+|}];
+
+  (* Introduce newline *)
+  let match_template = "1" in
+  let rewrite_template = "2\n" in
+  let src_dir = "example" ^/ "diff-no-newlines" ^/ "4" in
+  let command_args = Format.sprintf "'%s' '%s' -diff -f a -d %s -matcher .txt " match_template rewrite_template src_dir in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect_exact {|--- example/diff-no-newlines/4/a
++++ example/diff-no-newlines/4/a
+@@ -1,1 +1,1 @@
+-1
+\ No newline at end of file
++2
+|}];
+
+  (* Delete newline *)
+  let match_template = "1\n" in
+  let rewrite_template = "2" in
+  let src_dir = "example" ^/ "diff-no-newlines" ^/ "5" in
+  let command_args = Format.sprintf "'%s' '%s' -diff -f a -d %s -matcher .txt " match_template rewrite_template src_dir in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect_exact {|--- example/diff-no-newlines/5/a
++++ example/diff-no-newlines/5/a
+@@ -1,1 +1,1 @@
+-1
++2
+\ No newline at end of file
+|}]
+
+let%expect_test "diff_patches_preserve_slash_r" =
+  let source = "dont care" in
+
+  let src_dir = "example" ^/ "diff-preserve-slash-r" in
+  let match_template = "1" in
+  let rewrite_template = "2" in
+
+  let command_args = Format.sprintf "'%s' '%s' -json-lines -json-only-diff -f a -d %s -matcher .txt " match_template rewrite_template src_dir in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect_exact {|{"uri":"example/diff-preserve-slash-r/a","diff":"--- example/diff-preserve-slash-r/a\n+++ example/diff-preserve-slash-r/a\n@@ -1,3 +1,3 @@\n-1\r\n+2\r\n 2\r\n 3\r"}
+|}]
+
+let%expect_test "warn_on_match_template_starts_with_everything_hole" =
+  let source = "hello world\n" in
+  let match_template = ":[2] :[[1]]" in
+  let rewrite_template = ":[1]" in
+  let command_args =
+    Format.sprintf "-stdin -sequential '%s' '%s' -stdout -f .c " match_template rewrite_template
+  in
+  let command = Format.sprintf "%s %s" binary_path command_args in
+  let result = read_expect_stdin_and_stdout command source in
+  print_string result;
+  [%expect{|
+    world
+    WARNING: The match template starts with a :[hole]. You almost never want to start a template with :[hole], since it matches everything including newlines up to the part that comes after it. This can make things slow. :[[hole]] might be what you're looking for instead, like when you want to match an assignment foo = bar(args) on a line, use :[[var]] = bar(args). :[hole] is typically useful inside balanced delimiters. |}]
