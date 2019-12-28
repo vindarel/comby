@@ -5,7 +5,6 @@
 ; TODO
 ;
   test_match_rule
-  test_python_string_literals
   test_integration
   test_statistics
   test_cli
