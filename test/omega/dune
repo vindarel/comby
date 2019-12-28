@@ -4,7 +4,6 @@
 ;
 ; TODO
 ;
-  test_statistics
   test_cli
   test_special_matcher_cases
   test_rewrite_rule
