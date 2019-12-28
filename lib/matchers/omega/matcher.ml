@@ -260,7 +260,11 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let raw_literal_grammar ~right_delimiter =
     any_char_except ~reserved:[right_delimiter] |>> String.of_char
 
+  let skip_unit p =
+    p |>> ignore
+
   let sequence_chain ?left_delimiter:_ ?right_delimiter (p_list : (production * 'a) t list) =
+    if debug then Format.printf "Sequence chain p_list size: %d@." @@ List.length p_list;
     let i = ref 0 in
     List.fold_right p_list ~init:(return (Unit, acc)) ~f:(fun p acc ->
         let result =
@@ -284,32 +288,47 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      { offset = pos_before; identifier; text = (String.concat value) }
                   )
               | Non_space ->
+                if debug then Format.printf "Doing non_space@.";
                 let first_pos = Set_once.create () in
                 let until =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
                      means there's a hole at the end without anything following
                      it in the template. So it should always match to
-                     end_of_input (not empty string) *)
+                     end_of_input, not empty string. If it matches to empty
+                     string it chops up the matches so that f,o,o are three
+                     matches of foo. *)
                   if !i = 0 then
-                    (if debug then Format.printf "Yes this case@.";
-                     end_of_input)
+                    (if debug then Format.printf "hole until: match to the end of this level@.";
+                     (* OR, because this is a graphical hole, it cannot go
+                        across () boundaries, so stop there if we are just a
+                        hole. I'm not sure why this isn't needed in alpha. maybe
+                        because the until consumes the spaces and stuff? *)
+                     (* any_char_except basically does is_not in alpha and does lookahead without consuming. *)
+                     end_of_input
+                     <|> return ()
+                    )
                   else
-                    (if debug then Format.printf "Yes this second case@.";
+                    (if debug then Format.printf "hole until: append suffix@.";
                      acc >>= fun _ -> return ())
                 in
-                pos >>= fun pos_before ->
                 many1_till
                   (
                     pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
                     (* TODO: dimension? cf. Everything hole *)
-                    any_char_except ~reserved
+                    many1 (any_char_except ~reserved) |>> String.of_char_list
                   ) (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
                      until)
                 >>= fun value ->
+                if debug then Format.printf "Non_space value: %s@." (String.concat value);
+                let offset =
+                  match Set_once.get first_pos with
+                  | Some offset -> offset
+                  | _ -> failwith "Did not expect unset offset"
+                in
                 r user_state
                   (Match
-                     { offset = pos_before; identifier; text = (String.of_char_list value) }
+                     { offset; identifier; text = (String.concat value) }
                   )
               | Line ->
                 pos >>= fun pos_before ->
@@ -419,9 +438,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     *> string str
     *> many comment_parser
     >>= fun result -> r acc (String (String.concat result))
-
-  let skip_unit p =
-    p |>> ignore
 
   let identifier_parser () =
     many (alphanum <|> char '_')
