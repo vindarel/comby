@@ -181,6 +181,17 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         (* TODO this needs some kind of EOF condition to work for both template and match parsing *)
       ]
 
+  let any_allowed_except_parser allowed p =
+    let rewind = ref false in
+    let set_rewind v = rewind := v in
+    let get_rewind () = !rewind in
+    choice
+      [ (p >>= fun _ -> (return (set_rewind true)) >>= fun _ -> fail "bad")
+      ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else allowed)
+        (* TODO this needs some kind of EOF condition to work for both template and match parsing *)
+      ]
+
+
   let alphanum =
     satisfy (function
         | 'a' .. 'z'
@@ -290,7 +301,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
               | Non_space ->
                 if debug then Format.printf "Doing non_space@.";
                 let first_pos = Set_once.create () in
-                let _until =
+                let until =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
                      means there's a hole at the end without anything following
@@ -306,21 +317,23 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                         because the until consumes the spaces and stuff? *)
                      (* any_char_except basically does is_not in alpha and does lookahead without consuming. *)
                      end_of_input
-                     <|> return ()
+                     <|> (List.map reserved ~f:(fun r -> skip_unit (string r)) |> choice)
                      (* we want to continue until end_of_input or when a reserved is hit, but just not
                         consume the reserved *)
                      (* FIXME: we should not be consuming EOF for hole templates here, just do the check and add it after wards *)
                     )
                   else
                     (if debug then Format.printf "hole until: append suffix@.";
-                     acc >>= fun _ -> Format.printf "Parsed suffix@."; return ())
+                     acc >>= fun _ -> if debug then Format.printf "Parsed suffix@."; return ())
                 in
                 (
                   pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                  let allowed = any_char_except ~reserved in
                   (* TODO: dimension? cf. Everything hole *)
-                  many1 (any_char_except ~reserved)
+                  many1 (any_allowed_except_parser allowed until)
                 )
                 >>= fun value ->
+                acc >>= fun _ ->
                 if debug then Format.printf "1.Non_space value: %s@." (String.of_char_list value);
                 (*until >>= fun _ ->*)
                 if debug then Format.printf "2.Non_space value: %s@." (String.of_char_list value);
