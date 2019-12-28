@@ -1,4 +1,4 @@
-name: TRYLSIF2
+name: LSIF2
 on:
   - push
 jobs:
@@ -10,10 +10,10 @@ jobs:
         uses: rvantonder/lsif-ocaml-action@master
         with:
           verbose: 'true'
-      - name: Upload LSIF data
-        uses: sourcegraph/lsif-upload-action@master
-        continue-on-error: true
-        with:
-            endpoint: https://sourcegraph.com
-            github_token: ${{ secrets.GITHUB_TOKEN }}
-            file: 'data.lsif'
+#     - name: Upload LSIF data
+#       uses: sourcegraph/lsif-upload-action@master
+#       continue-on-error: true
+#       with:
+#           endpoint: https://sourcegraph.com
+#           github_token: ${{ secrets.GITHUB_TOKEN }}
+#           file: 'data.lsif'
