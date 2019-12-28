@@ -590,37 +590,46 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     p_list
     |> sequence_chain
     |> fun matcher ->
-    (* XXX: what is the difference does many vs many1 make here? Semantically,
-       it should mean "0 or more matching contexts" vs "1 or more matching
-       contexts". We only care about the 1 case anyway, so... *)
-    let prefix =
-      skip_unit comment_parser
-      <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-      <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-      <|> skip_unit any_char
-    in
-    many (skip_unit
-            (many_till prefix
-               (
-                 at_end_of_input >>= fun res ->
-                 if debug then Format.printf "We are at the end? %b.@." res;
-                 if res then
-                   (if debug then Format.printf "We ended@.";
-                    fail "x")
-                 else
-                   (* we found a match *)
-                   pos >>= fun start_pos ->
-                   matcher >>= fun _access_last_production_herpe ->
-                   pos >>= fun end_pos ->
-                   record_match_context start_pos end_pos;
-                   current_environment_ref := Match.Environment.create ();
-                   return Unit)
-               (*<|>
-                 (end_of_input >>= fun () -> return Unit)*)
-            )
-         )
-    (*>>= fun _x -> end_of_input *)
-    >>= fun _x -> r acc Unit
+    match !configuration_ref.match_kind with
+    | Exact ->
+      (pos >>= fun start_pos ->
+       matcher >>= fun _access_last_production_herpe ->
+       pos >>= fun end_pos ->
+       record_match_context start_pos end_pos;
+       current_environment_ref := Match.Environment.create ();
+       r acc Unit)
+    | Fuzzy ->
+      (* XXX: what is the difference does many vs many1 make here? Semantically,
+         it should mean "0 or more matching contexts" vs "1 or more matching
+         contexts". We only care about the 1 case anyway, so... *)
+      let prefix =
+        skip_unit comment_parser
+        <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+        <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+        <|> skip_unit any_char
+      in
+      many (skip_unit
+              (many_till prefix
+                 (
+                   at_end_of_input >>= fun res ->
+                   if debug then Format.printf "We are at the end? %b.@." res;
+                   if res then
+                     (if debug then Format.printf "We ended@.";
+                      fail "x")
+                   else
+                     (* we found a match *)
+                     pos >>= fun start_pos ->
+                     matcher >>= fun _access_last_production_herpe ->
+                     pos >>= fun end_pos ->
+                     record_match_context start_pos end_pos;
+                     current_environment_ref := Match.Environment.create ();
+                     return Unit)
+                 (*<|>
+                   (end_of_input >>= fun () -> return Unit)*)
+              )
+           )
+      (*>>= fun _x -> end_of_input *)
+      >>= fun _x -> r acc Unit
 
   let to_template template =
     let state = Buffered.parse general_parser_generator in
@@ -682,8 +691,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
              }
     }
 
-
-  let all ?configuration:_ ~template ~source : Match.t list =
+  let all ?configuration ~template ~source : Match.t list =
+    configuration_ref := Option.value configuration ~default:!configuration_ref;
     matches_ref := [];
     if template = "" && source = "" then
       [trivial]
@@ -693,6 +702,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       | Error _ -> List.rev !matches_ref
 
   let first ?configuration ?shift:_ template source : Match.t Or_error.t =
+    configuration_ref := Option.value configuration ~default:!configuration_ref;
     matches_ref := [];
     match all ?configuration ~template ~source with
     | [] -> Or_error.error_string "nothing"
