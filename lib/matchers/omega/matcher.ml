@@ -587,52 +587,60 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         return x
       )
     |>> fun p_list ->
-    p_list
-    |> sequence_chain
-    |> fun matcher ->
-    match !configuration_ref.match_kind with
-    | Exact ->
-      (
-        pos >>= fun start_pos ->
-        if debug then Format.printf "Yes exact@.";
-        matcher >>= fun _access_last_production_here ->
-        pos >>= fun end_pos ->
-        end_of_input >>= fun _ ->
-        record_match_context start_pos end_pos;
-        current_environment_ref := Match.Environment.create ();
-        r acc Unit)
-    | Fuzzy ->
-      (* XXX: what is the difference does many vs many1 make here? Semantically,
-         it should mean "0 or more matching contexts" vs "1 or more matching
-         contexts". We only care about the 1 case anyway, so... *)
-      let prefix =
-        skip_unit comment_parser
-        <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-        <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-        <|> skip_unit any_char
-      in
-      many (skip_unit
-              (many_till prefix
-                 (
-                   at_end_of_input >>= fun res ->
-                   if debug then Format.printf "We are at the end? %b.@." res;
-                   if res then
-                     (if debug then Format.printf "We ended@.";
-                      fail "x")
-                   else
-                     (* we found a match *)
-                     pos >>= fun start_pos ->
-                     matcher >>= fun _access_last_production_here ->
-                     pos >>= fun end_pos ->
-                     record_match_context start_pos end_pos;
-                     current_environment_ref := Match.Environment.create ();
-                     return Unit)
-                 (*<|>
-                   (end_of_input >>= fun () -> return Unit)*)
-              )
-           )
-      (*>>= fun _x -> end_of_input *)
-      >>= fun _x -> r acc Unit
+    match p_list with
+    | [] ->
+      (* The template is the empty string and source is nonempty. We need to
+         detect it here or we will always match successfully on empty string and
+         never advance input below. *)
+      r acc Unit
+    | p_list ->
+      p_list
+      |> sequence_chain
+      |> fun matcher ->
+      match !configuration_ref.match_kind with
+      | Exact ->
+        (
+          pos >>= fun start_pos ->
+          if debug then Format.printf "Yes exact@.";
+          matcher >>= fun _access_last_production_here ->
+          pos >>= fun end_pos ->
+          end_of_input >>= fun _ ->
+          record_match_context start_pos end_pos;
+          current_environment_ref := Match.Environment.create ();
+          r acc Unit)
+      | Fuzzy ->
+        (* XXX: what is the difference does many vs many1 make here? Semantically,
+           it should mean "0 or more matching contexts" vs "1 or more matching
+           contexts". We only care about the 1 case anyway, so... *)
+        let prefix =
+          skip_unit comment_parser
+          <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+          <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+          <|> skip_unit any_char
+        in
+        many (skip_unit
+                (many_till prefix
+                   (
+                     at_end_of_input >>= fun res ->
+                     if debug then Format.printf "We are at the end? %b.@." res;
+                     if res then
+                       (if debug then Format.printf "We ended@.";
+                        fail "x")
+                     else
+                       (* we found a match *)
+                       pos >>= fun start_pos ->
+                       if debug then Format.printf "We found a match@.";
+                       matcher >>= fun _access_last_production_here ->
+                       pos >>= fun end_pos ->
+                       record_match_context start_pos end_pos;
+                       current_environment_ref := Match.Environment.create ();
+                       return Unit)
+                   (*<|>
+                     (end_of_input >>= fun () -> return Unit)*)
+                )
+             )
+        (*>>= fun _x -> end_of_input *)
+        >>= fun _x -> r acc Unit
 
   let to_template template =
     let state = Buffered.parse general_parser_generator in
