@@ -290,7 +290,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
               | Non_space ->
                 if debug then Format.printf "Doing non_space@.";
                 let first_pos = Set_once.create () in
-                let until =
+                let _until =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
                      means there's a hole at the end without anything following
@@ -307,20 +307,23 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      (* any_char_except basically does is_not in alpha and does lookahead without consuming. *)
                      end_of_input
                      <|> return ()
+                     (* we want to continue until end_of_input or when a reserved is hit, but just not
+                        consume the reserved *)
+                     (* FIXME: we should not be consuming EOF for hole templates here, just do the check and add it after wards *)
                     )
                   else
                     (if debug then Format.printf "hole until: append suffix@.";
-                     acc >>= fun _ -> return ())
+                     acc >>= fun _ -> Format.printf "Parsed suffix@."; return ())
                 in
-                many1_till
-                  (
-                    pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
-                    (* TODO: dimension? cf. Everything hole *)
-                    many1 (any_char_except ~reserved) |>> String.of_char_list
-                  ) (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
-                     until)
+                (
+                  pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                  (* TODO: dimension? cf. Everything hole *)
+                  many1 (any_char_except ~reserved)
+                )
                 >>= fun value ->
-                if debug then Format.printf "Non_space value: %s@." (String.concat value);
+                if debug then Format.printf "1.Non_space value: %s@." (String.of_char_list value);
+                (*until >>= fun _ ->*)
+                if debug then Format.printf "2.Non_space value: %s@." (String.of_char_list value);
                 let offset =
                   match Set_once.get first_pos with
                   | Some offset -> offset
@@ -328,7 +331,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 in
                 r user_state
                   (Match
-                     { offset; identifier; text = (String.concat value) }
+                     { offset; identifier; text = (String.of_char_list value) }
                   )
               | Line ->
                 pos >>= fun pos_before ->
