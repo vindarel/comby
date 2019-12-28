@@ -334,9 +334,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 )
                 >>= fun value ->
                 acc >>= fun _ ->
-                if debug then Format.printf "1.Non_space value: %s@." (String.of_char_list value);
-                (*until >>= fun _ ->*)
-                if debug then Format.printf "2.Non_space value: %s@." (String.of_char_list value);
                 let offset =
                   match Set_once.get first_pos with
                   | Some offset -> offset

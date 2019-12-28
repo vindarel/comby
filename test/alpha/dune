@@ -3,7 +3,6 @@
  (modules
   test_optional_holes
   test_match_rule
-  test_hole_extensions
   test_python_string_literals
   test_integration
   test_statistics

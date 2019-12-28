@@ -1,6 +1,7 @@
 (library
  (name common_test_integration)
  (modules
+  test_hole_extensions
   test_generic
   test_string_literals
   test_c_style_comments
