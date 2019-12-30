@@ -1,4 +1,4 @@
-name: LSIFTEST
+name: LSIF
 on:
   - push
 jobs:
