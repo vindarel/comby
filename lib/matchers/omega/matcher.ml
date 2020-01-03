@@ -221,6 +221,16 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let generate_single_hole_parser () =
     (alphanum <|> char '_') |>> String.of_char
 
+
+  (** must have at least one, otherwise spins on
+      the empty string *)
+  let spaces1 =
+    satisfy is_whitespace >>= fun c ->
+    (* XXX use skip_while once everything works.
+       we don't need the string *)
+    take_while is_whitespace >>= fun s ->
+    return (Format.sprintf "%c%s" c s)
+
   let generate_everything_hole_parser
       ?priority_left_delimiter:left_delimiter
       ?priority_right_delimiter:right_delimiter
@@ -247,13 +257,14 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     fix (fun grammar ->
         let delimsx = between_nested_delims (many grammar) in
         let other = any_char_except ~reserved |>> String.of_char in
-        (* FIXME holes does not handle space here, but does in alpha *)
+        (* FIXME holes does not handle space here, but does in alpha. Needed? *)
         choice
           [ comment_parser
           ; raw_string_literal_parser
               (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
           ; escapable_string_literal_parser
               (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
+          ; spaces1
           ; delimsx
           ; other
           ])
@@ -431,15 +442,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         in
         i := !i + 1;
         result)
-
-  (** must have at least one, otherwise spins on
-      the empty string *)
-  let spaces1 =
-    satisfy is_whitespace >>= fun c ->
-    (* XXX use skip_while once everything works.
-       we don't need the string *)
-    take_while is_whitespace >>= fun s ->
-    return (Format.sprintf "%c%s" c s)
 
   let spaces =
     take_while is_whitespace >>= fun s ->
@@ -638,12 +640,23 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      else
                        (* we found a match *)
                        pos >>= fun start_pos ->
-                       if debug then Format.printf "We found a match@.";
-                       matcher >>= fun _access_last_production_here ->
-                       pos >>= fun end_pos ->
-                       record_match_context start_pos end_pos;
-                       current_environment_ref := Match.Environment.create ();
-                       return Unit)
+                       let matched =
+                         matcher >>= fun _access_last_production_here ->
+                         if debug then Format.printf "We found a full match context@.";
+                         pos >>= fun end_pos ->
+                         record_match_context start_pos end_pos;
+                         current_environment_ref := Match.Environment.create ();
+                         return Unit
+                       in
+                       let no_match =
+                         (* reset any partial binds of holes *)
+                         if debug then Format.printf "Failed to match@.";
+                         current_environment_ref := Match.Environment.create ();
+                         (* cannot return: we must consume or else infini loop! *)
+                         (*return Unit*)
+                         fail "no match, advance."
+                       in
+                       choice [ matched; no_match ])
                    (*<|>
                      (end_of_input >>= fun () -> return Unit)*)
                 )
