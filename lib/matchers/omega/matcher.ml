@@ -321,7 +321,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                   )
               | Non_space ->
                 if debug then Format.printf "Doing non_space@.";
-                let first_pos = Set_once.create () in
+                let first_pos = ref (-1) in
+                let set_pos v = first_pos := v in
+                let get_pos () = !first_pos in
                 let until =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
@@ -349,7 +351,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 in
                 (
                   pos >>= fun pos ->
-                  Set_once.set_if_none first_pos [%here] pos;
+                  if get_pos () = (-1) then set_pos pos;
                   let allowed = any_char_except ~reserved in
                   (* TODO: dimension? cf. Everything hole *)
                   many1 (any_allowed_except_parser allowed until)
@@ -357,10 +359,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 >>= fun value ->
                 acc >>= fun _ ->
                 let offset =
-                  match Set_once.get first_pos with
-                  | Some offset ->
+                  match get_pos () with
+                  | -1 -> failwith "Did not expect unset offset"
+                  | offset ->
+                    if debug then Format.printf "Offset: %d@." offset;
+                    set_pos (-1);
                     offset
-                  | _ -> failwith "Did not expect unset offset"
                 in
                 r user_state
                   (Match
