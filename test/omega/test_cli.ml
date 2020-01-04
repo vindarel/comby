@@ -663,7 +663,6 @@ let%expect_test "matcher_override" =
   print_string result;
   [%expect{| |}]
 
-(* 2.
 let%expect_test "infer_and_honor_extensions" =
   let source = "doesn't matter" in
   let src_dir = "example" ^/ "src" ^/ "honor-file-extensions" in
@@ -697,7 +696,6 @@ let%expect_test "infer_and_honor_extensions" =
      }
 
     WARNING: the GENERIC matcher was used, because a language could not be inferred from the file extension(s). The GENERIC matcher may miss matches. See '-list' to set a matcher for a specific language and to remove this warning. |}]
-   *)
 
 let%expect_test "diff_only" =
   let source = "hello world" in
