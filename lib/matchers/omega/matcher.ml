@@ -1,4 +1,5 @@
 open Core
+
 open Angstrom
 
 open Types
@@ -347,7 +348,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      acc >>= fun _ -> if debug then Format.printf "Parsed suffix@."; return ())
                 in
                 (
-                  pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                  pos >>= fun pos ->
+                  Set_once.set_if_none first_pos [%here] pos;
                   let allowed = any_char_except ~reserved in
                   (* TODO: dimension? cf. Everything hole *)
                   many1 (any_allowed_except_parser allowed until)
@@ -356,7 +358,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 acc >>= fun _ ->
                 let offset =
                   match Set_once.get first_pos with
-                  | Some offset -> offset
+                  | Some offset ->
+                    offset
                   | _ -> failwith "Did not expect unset offset"
                 in
                 r user_state
@@ -385,7 +388,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                   )
               | Everything ->
                 if debug then Format.printf "do hole %s@." identifier;
-                let first_pos = Set_once.create () in
+                let first_pos = ref (-1) in
+                let set_pos v = first_pos := v in
+                let get_pos () = !first_pos in
                 let until =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
@@ -401,7 +406,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 in
                 let hole_matcher =
                   (many_till
-                     (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                     (pos >>= fun pos ->
+                      if debug then Format.printf "Pos is %d@." pos;
+                      if get_pos () = (-1) then set_pos pos;
                       (match dimension with
                        | Code -> generate_everything_hole_parser ()
                        | Escapable_string_literal ->
@@ -413,7 +420,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                        | _ -> failwith "Unimplemented for comment"
                       )
                      )
-                     (pos >>= fun pos -> Set_once.set_if_none first_pos [%here] pos;
+                     (pos >>= fun pos ->
+                      if get_pos () = (-1) then set_pos pos;
+                      if debug then Format.printf "Pos is %d@." pos;
                       until)
                      (* it may be that the many till for the first parser
                         succeeds on 'empty string', specifically in the :[1]:[2]
@@ -426,9 +435,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 hole_matcher >>= fun text ->
                 (*Format.printf "have results %d@." @@ List.length results;*)
                 let offset =
-                  match Set_once.get first_pos with
-                  | Some offset -> offset
-                  | _ -> failwith "Did not expect unset offset"
+                  match get_pos () with
+                  | -1 -> failwith "Did not expect unset offset"
+                  | offset ->
+                    if debug then Format.printf "Offset: %d@." offset;
+                    set_pos (-1);
+                    offset
                 in
                 r
                   user_state
