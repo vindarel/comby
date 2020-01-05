@@ -235,7 +235,7 @@ let create rule =
     spaces
     *> string Syntax.rule_prefix
     *> spaces1
-    *> sep_by1 (char ',') expression_parser
+    *> sep_by1 (spaces *> char ',' <* spaces) expression_parser
     <* end_of_input
   in
   match parse_string rule_parser rule with
