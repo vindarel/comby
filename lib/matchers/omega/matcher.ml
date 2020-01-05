@@ -2,15 +2,13 @@ open Core
 
 open Angstrom
 
+open Parser
 open Types
 open Omega
 
 let configuration_ref = ref (Configuration.create ())
-
 let matches_ref : Match.t list ref = ref []
-
 let source_ref : string ref = ref ""
-
 let current_environment_ref : Match.Environment.t ref = ref (Match.Environment.create ())
 
 let (|>>) p f =
@@ -24,8 +22,6 @@ let record_match_context pos_before pos_after =
   let open Match.Location in
   if debug then Format.printf "match context start pos: %d@." pos_before;
   if debug then Format.printf "match context end pos %d@." pos_after;
-  (* FIXME this may be slow. Try (a) collecting this
-     or (b) removing it by just doing a rewrite *)
   let extract_matched_text source { offset = match_start; _ } { offset = match_end; _ } =
     String.slice source match_start match_end
   in
@@ -84,12 +80,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       current_environment_ref := environment;
       return (Unit, acc)
     | _ -> return (Unit, acc)
-
-  let between left right p =
-    left *> p <* right
-
-  let zero =
-    fail ""
 
   let comment_parser =
     match Syntax.comments with
@@ -158,79 +148,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     |> List.sort ~compare:(fun v2 v1 ->
         String.length v1 - String.length v2)
 
-  (* XXX can shortcircuit *)
-  (* what if you hit a reserved
-     seqence "{" and then attempt
-     ":[[" and then say "end of
-     input" and then move ahead any_char. not good.
-     going from longest to shortest works though *)
-  let any_char_except ~reserved =
-    List.fold reserved
-      ~init:(return `OK)
-      ~f:(fun acc reserved_sequence ->
-          option `End_of_input
-            (peek_string (String.length reserved_sequence)
-             >>= fun s ->
-             if s = reserved_sequence then
-               return `Reserved_sequence
-             else
-               acc))
-    >>= function
-    | `OK -> any_char
-    | `End_of_input -> any_char
-    | `Reserved_sequence -> fail "reserved sequence hit"
-
-
-  let any_char_except_parser p =
-    let rewind = ref false in
-    let set_rewind v = rewind := v in
-    let get_rewind () = !rewind in
-    choice
-      [ (p >>= fun _ -> (return (set_rewind true)) >>= fun _ -> fail "bad")
-      ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else any_char)
-        (* TODO this needs some kind of EOF condition to work for both template and match parsing *)
-      ]
-
-  let any_allowed_except_parser allowed p =
-    let rewind = ref false in
-    let set_rewind v = rewind := v in
-    let get_rewind () = !rewind in
-    choice
-      [ (p >>= fun _ -> (return (set_rewind true)) >>= fun _ -> fail "bad")
-      ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else allowed)
-        (* TODO this needs some kind of EOF condition to work for both template and match parsing *)
-      ]
-
-
-  let alphanum =
-    satisfy (function
-        | 'a' .. 'z'
-        | 'A' .. 'Z'
-        | '0' .. '9' -> true
-        | _ -> false)
-
-  let is_whitespace = function
-    | ' ' | '\t' | '\r' | '\n' -> true
-    | _ -> false
-
-  let blank =
-    choice
-      [ char ' '
-      ; char '\t'
-      ]
-
   let generate_single_hole_parser () =
     (alphanum <|> char '_') |>> String.of_char
-
-
-  (** must have at least one, otherwise spins on
-      the empty string *)
-  let spaces1 =
-    satisfy is_whitespace >>= fun c ->
-    (* XXX use skip_while once everything works.
-       we don't need the string *)
-    take_while is_whitespace >>= fun s ->
-    return (Format.sprintf "%c%s" c s)
 
   let generate_everything_hole_parser
       ?priority_left_delimiter:left_delimiter
@@ -270,14 +189,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
           ; other
           ])
 
-  let cons x xs = x :: xs
-
-  let many_till p t =
-    fix (fun m -> (t *> return []) <|> (lift2 cons p m))
-
-  let many1_till p t =
-    lift2 cons p (many_till p t)
-
   (* this thing is wrapped by a many. also rename it to 'string hole match syntax per char' *)
   let escapable_literal_grammar ~right_delimiter =
     match Syntax.escapable_string_literals with
@@ -291,9 +202,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
 
   let raw_literal_grammar ~right_delimiter =
     any_char_except ~reserved:[right_delimiter] |>> String.of_char
-
-  let skip_unit p =
-    p |>> ignore
 
   let sequence_chain ?left_delimiter:_ ?right_delimiter (p_list : (production * 'a) t list) =
     if debug then Format.printf "Sequence chain p_list size: %d@." @@ List.length p_list;
@@ -723,7 +631,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       Format.printf "Template FAIL %s@." @@ Error.to_string_hum e;
       Error e
 
-  (** Hardcoded case when template and source are empty string. The parser logic is too tricky for this right now. *)
+  (** Hardcoded case when template and source are empty string. The parser logic
+      is too tricky for this right now. *)
   let trivial =
     let open Match in
     let open Location in
@@ -743,10 +652,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let all ?configuration ~template ~source : Match.t list =
     configuration_ref := Option.value configuration ~default:!configuration_ref;
     matches_ref := [];
-    if template = "" && source = "" then
-      [trivial]
-    else
-      match first_broken template source with
+    if template = "" && source = "" then [trivial]
+    else match first_broken template source with
       | Ok _
       | Error _ -> List.rev !matches_ref
 
@@ -754,9 +661,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     configuration_ref := Option.value configuration ~default:!configuration_ref;
     matches_ref := [];
     match all ?configuration ~template ~source with
-    | [] -> Or_error.error_string "nothing"
-    | (hd::_) as m ->
-      if debug then List.iter m ~f:(fun { environment; _ } ->
-          Format.printf "START:@.%s@.END@." (Match.Environment.to_string environment));
-      Ok hd
+    | [] -> Or_error.error_string "No result"
+    | (hd::_) -> Ok hd (* FIXME be efficient *)
 end
