@@ -25,9 +25,8 @@ let record_match_context pos_before pos_after =
   let extract_matched_text source { offset = match_start; _ } { offset = match_end; _ } =
     String.slice source match_start match_end
   in
+  (* line/col values are placeholders and not accurate until processed in pipeline.ml *)
   let match_context =
-    (* set line/column to what we would get in alpha. we compute line/col in
-       pipeline.ml. this can be done here later *)
     let match_start = { offset = pos_before; line = 1; column = pos_before + 1 } in
     let match_end = { offset = pos_after; line = 1; column = pos_after + 1 } in
     Match.
@@ -58,48 +57,51 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       if debug then Format.printf "Matched String: %S@." s;
       return (Unit, acc)
     | Match { offset = pos_begin; identifier; text = content } ->
-      (* using just pos after for now, because thats what we do in matcher. lol *)
       if debug then Format.printf "Match: %S @@ %d for %s@." content pos_begin identifier;
-      (* we do what alpha matcher does here, which is make the match on one line
-         and add offset. In pipeline, we convert to line/col. This can be fixed
-         later. *)
+      (* line/col values are placeholders and not accurate until processed in pipeline.ml *)
       let before = { offset = pos_begin; line = 1; column = pos_begin + 1 } in
       let pos_after_offset = pos_begin + String.length content in
       let after = { offset = pos_after_offset; line = 1; column = pos_after_offset + 1 } in
       let range = { match_start = before; match_end = after } in
+      let add identifier = Environment.add ~range !current_environment_ref identifier content in
       let environment =
-        if Environment.exists !current_environment_ref identifier then
+        match Environment.exists !current_environment_ref identifier with
+        | true ->
+          (* FIXME: get rid of UUID *)
           let fresh_hole_id =
-            (* FIXME: get rid of UUID *)
             Format.sprintf "%s_%s_equal" Uuid_unix.(Fn.compose Uuid.to_string create ()) identifier
           in
-          Environment.add ~range !current_environment_ref fresh_hole_id content
-        else
-          Environment.add ~range !current_environment_ref identifier content
+          add fresh_hole_id
+        | false -> add identifier
       in
       current_environment_ref := environment;
       return (Unit, acc)
     | _ -> return (Unit, acc)
+
+
+  let multiline left right =
+    let module M = Parsers.Comments.Omega.Multiline.Make(struct
+        let left = left
+        let right = right
+      end)
+    in
+    M.comment
+
+  let until_newline start =
+    let module M = Parsers.Comments.Omega.Until_newline.Make(struct
+        let start = start
+      end)
+    in
+    M.comment
 
   let comment_parser =
     match Syntax.comments with
     | [] -> zero
     | syntax ->
       List.map syntax ~f:(function
-          | Multiline (left, right) ->
-            let module M = Parsers.Comments.Omega.Multiline.Make(struct
-                let left = left
-                let right = right
-              end)
-            in
-            M.comment
-          | Until_newline start ->
-            let module M = Parsers.Comments.Omega.Until_newline.Make(struct
-                let start = start
-              end)
-            in
-            M.comment
-          | Nested_multiline (_, _) -> zero) (* FIXME unimplemented nested multiline comments *)
+          | Multiline (left, right) -> multiline left right
+          | Until_newline start -> until_newline start
+          | Nested_multiline (_, _) -> zero) (* FIXME: unimplemented nested multiline comments *)
       |> choice
 
   type 'a literal_parser_callback = contents:string -> left_delimiter:string -> right_delimiter:string -> 'a
