@@ -127,21 +127,19 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     M.base_string_literal
 
   let escapable_string_literal_parser (f : 'a literal_parser_callback) =
-    let parsers =
-      match Syntax.escapable_string_literals with
-      | None -> []
-      | Some { delimiters; escape_character } ->
-        List.map delimiters ~f:(fun delimiter ->
-            escapable delimiter escape_character >>= fun contents ->
-            return (f ~contents ~left_delimiter:delimiter ~right_delimiter:delimiter))
-    in
-    choice parsers
+    choice @@
+    match Syntax.escapable_string_literals with
+    | None -> []
+    | Some { delimiters; escape_character } ->
+      List.map delimiters ~f:(fun delimiter ->
+          escapable delimiter escape_character >>= fun contents ->
+          return (f ~contents ~left_delimiter:delimiter ~right_delimiter:delimiter))
 
   let raw_string_literal_parser (f : 'a literal_parser_callback) =
+    choice @@
     List.map Syntax.raw_string_literals ~f:(fun (left_delimiter, right_delimiter) ->
         raw left_delimiter right_delimiter >>= fun contents ->
         return (f ~contents ~left_delimiter ~right_delimiter))
-    |> choice
 
   let until_of_from from =
     Syntax.user_defined_delimiters
@@ -451,66 +449,35 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 not fail here"
 
   let general_parser_generator : (production * 'a) t t =
+    let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
+    let other =
+      (many1 (any_char_except ~reserved) |>> String.of_char_list)
+      |>> generate_string_token_parser
+    in
+    let code_holes =
+      Hole.sorts ()
+      |> List.map ~f:(fun kind -> hole_parser kind Code)
+      |> choice
+    in
     fix (fun (generator : (production * 'a) t list t) ->
         if debug then Format.printf "Descends@.";
         let nested =
           if debug then Format.printf "Nested@.";
-          Syntax.user_defined_delimiters
-          |> List.map ~f:(fun (left_delimiter, right_delimiter) ->
-              (string left_delimiter
-               *> generator
-               <* string right_delimiter)
+          choice @@
+          List.map Syntax.user_defined_delimiters ~f:(fun (left_delimiter, right_delimiter) ->
+              (string left_delimiter *> generator <* string right_delimiter)
               >>= fun (g: (production * 'a) t list) ->
               if debug then Format.printf "G size: %d; delim %s@." (List.length g) left_delimiter;
-              (([string left_delimiter
-                 >>= fun result -> r acc (String result)]
-                @ g
-                @ [ string right_delimiter
-                    >>= fun result -> r acc (String result)])
-               |>
-               sequence_chain)
-              |> return)
-          |> choice
-        in
-        let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
-
-        let escapable_string_literal_parser : (production * 'a) t t =
-          escapable_string_literal_parser (generate_hole_for_literal Escapable_string_literal ())
-        in
-        let raw_string_literal_parser : (production * 'a) t t =
-          raw_string_literal_parser (generate_hole_for_literal Raw_string_literal ())
-        in
-        let other =
-          (* XXX many1_till would be cool, but it also parses the thing that
-             causes it to fail, which i need restored.  many_till is 'parse and
-             include the parse of the exception', whereas I want parse and
-             exclude the parse of the exception (hard to reintroduce ) *)
-   (*
-   (many1_till (any_char >>= fun c -> Format.printf "parsed %c@." c;
-   return c) (List.map reserved ~f:string |> choice >>= fun x ->
-   Format.printf "Fail on %s@." x; return x) |>> fun s ->
-   Format.printf "Chars: %s@." @@ String.of_char_list s;
-   String.of_char_list s) *)
-          (many1 (any_char_except ~reserved) |>> String.of_char_list)
-          |>> fun x ->
-          if debug then Format.printf "Other: %s@." x;
-          generate_string_token_parser x
-        in
-        if debug then Format.printf "Many... @.";
-        (* can't be many1 because then {} isn't a valid template (delimiters have to
-           contain something then and can't be empty *)
-        (* don't want it to be many because empty string will satisfy and
-           "" is a valid template, or even "{", because it generates 'seq' on chain *)
-        let code_holes =
-          Hole.sorts ()
-          (* Note: uses attempt in alpha, probably for alphanum delims*)
-          |> List.map ~f:(fun kind -> hole_parser kind Code)
-          |> choice
+              return @@
+              sequence_chain @@
+              [string left_delimiter >>= fun result -> r acc (String result)]
+              @ g
+              @ [ string right_delimiter >>= fun result -> r acc (String result)])
         in
         many @@ choice
           [ code_holes
-          ; raw_string_literal_parser
-          ; escapable_string_literal_parser
+          ; raw_string_literal_parser (generate_hole_for_literal Raw_string_literal ())
+          ; escapable_string_literal_parser (generate_hole_for_literal Escapable_string_literal ())
           ; spaces
           ; nested
           ; other
