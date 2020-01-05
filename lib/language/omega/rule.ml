@@ -219,7 +219,7 @@ let create rule =
           string Syntax.start_rewrite_pattern *> spaces *> atom_parser <* spaces <* char '{' <* spaces
           >>= fun atom ->
           atom_parser <* spaces <* string Syntax.arrow <* spaces >>= fun match_template ->
-          spaces *> rewrite_template_parser <* char '}' <* spaces
+          spaces *> rewrite_template_parser <* spaces <* char '}' <* spaces
           |>> fun rewrite_template ->
           Rewrite (atom, (match_template, rewrite_template))
         in
