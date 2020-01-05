@@ -98,38 +98,48 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     match Syntax.comments with
     | [] -> zero
     | syntax ->
-      List.map syntax ~f:(function
-          | Multiline (left, right) -> multiline left right
-          | Until_newline start -> until_newline start
-          | Nested_multiline (_, _) -> zero) (* FIXME: unimplemented nested multiline comments *)
-      |> choice
+      let parsers =
+        List.map syntax ~f:(function
+            | Multiline (left, right) -> multiline left right
+            | Until_newline start -> until_newline start
+            | Nested_multiline (_, _) -> zero) (* FIXME: unimplemented nested multiline comments *)
+      in
+      choice parsers
 
   type 'a literal_parser_callback = contents:string -> left_delimiter:string -> right_delimiter:string -> 'a
 
+  let escapable delimiter escape_character =
+    let module M =
+      Parsers.String_literals.Omega.Escapable.Make(struct
+        let delimiter = delimiter
+        let escape = escape_character
+      end)
+    in
+    M.base_string_literal
+
+  let raw left_delimiter right_delimiter =
+    let module M =
+      Parsers.String_literals.Omega.Raw.Make(struct
+        let left_delimiter = left_delimiter
+        let right_delimiter = right_delimiter
+      end)
+    in
+    M.base_string_literal
+
   let escapable_string_literal_parser (f : 'a literal_parser_callback) =
-    (match Syntax.escapable_string_literals with
-     | None -> []
-     | Some { delimiters; escape_character } ->
-       List.map delimiters ~f:(fun delimiter ->
-           let module M =
-             Parsers.String_literals.Omega.Escapable.Make(struct
-               let delimiter = delimiter
-               let escape = escape_character
-             end)
-           in
-           M.base_string_literal >>= fun contents ->
-           return (f ~contents ~left_delimiter:delimiter ~right_delimiter:delimiter)))
-    |> choice
+    let parsers =
+      match Syntax.escapable_string_literals with
+      | None -> []
+      | Some { delimiters; escape_character } ->
+        List.map delimiters ~f:(fun delimiter ->
+            escapable delimiter escape_character >>= fun contents ->
+            return (f ~contents ~left_delimiter:delimiter ~right_delimiter:delimiter))
+    in
+    choice parsers
 
   let raw_string_literal_parser (f : 'a literal_parser_callback) =
     List.map Syntax.raw_string_literals ~f:(fun (left_delimiter, right_delimiter) ->
-        let module M =
-          Parsers.String_literals.Omega.Raw.Make(struct
-            let left_delimiter = left_delimiter
-            let right_delimiter = right_delimiter
-          end)
-        in
-        M.base_string_literal >>= fun contents ->
+        raw left_delimiter right_delimiter >>= fun contents ->
         return (f ~contents ~left_delimiter ~right_delimiter))
     |> choice
 
@@ -163,29 +173,31 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       >>= fun result -> return (String.concat @@ [from] @ result @ [until])
     in
     let between_nested_delims p =
-      (match left_delimiter, right_delimiter with
-       | Some left_delimiter, Some right_delimiter -> [ (left_delimiter, right_delimiter) ]
-       | _ -> Syntax.user_defined_delimiters)
+      let parsers =
+        match left_delimiter, right_delimiter with
+        | Some left_delimiter, Some right_delimiter -> [ (left_delimiter, right_delimiter) ]
+        | _ -> Syntax.user_defined_delimiters
+      in
+      parsers
       |> List.map ~f:fst
       |> List.map ~f:(between_nested_delims p)
       |> choice
     in
     let reserved =
-      (match left_delimiter, right_delimiter with
-       | Some left_delimiter, Some right_delimiter -> [ (left_delimiter, right_delimiter) ]
-       | _ -> Syntax.user_defined_delimiters)
-      |> List.concat_map ~f:(fun (from, until) -> [from; until])
+      let parsers =
+        match left_delimiter, right_delimiter with
+        | Some left_delimiter, Some right_delimiter -> [ (left_delimiter, right_delimiter) ]
+        | _ -> Syntax.user_defined_delimiters
+      in
+      List.concat_map parsers ~f:(fun (from, until) -> [from; until])
     in
     fix (fun grammar ->
         let delimsx = between_nested_delims (many grammar) in
         let other = any_char_except ~reserved |>> String.of_char in
-        (* FIXME holes does not handle space here, but does in alpha. Needed? *)
         choice
           [ comment_parser
-          ; raw_string_literal_parser
-              (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
-          ; escapable_string_literal_parser
-              (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
+          ; raw_string_literal_parser (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
+          ; escapable_string_literal_parser (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
           ; spaces1
           ; delimsx
           ; other
@@ -216,7 +228,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
             if debug then Format.printf "Composing p with terminating parser@.";
             p *> acc
           | Ok (Hole { sort; identifier; dimension; _ }, user_state) ->
-            (*Format.printf "Ok.@.";*)
             begin
               match sort with
               | Alphanum ->
@@ -369,10 +380,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         i := !i + 1;
         result)
 
-  let spaces =
-    take_while is_whitespace >>= fun s ->
-    return s
-
   (* XXX change ignore to unit once everything works.
      right now it's the string that was parsed by spaces1 *)
   let generate_spaces_parser _ignored =
@@ -388,10 +395,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     *> string str
     *> many comment_parser
     >>= fun result -> r acc (String (String.concat result))
-
-  let identifier_parser () =
-    many (alphanum <|> char '_')
-    |>> String.of_char_list
 
   let single_hole_parser () =
     string ":[[" *> identifier_parser () <* string "]]"
@@ -411,10 +414,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     *> identifier_parser () >>= fun identifier ->
     string "]" *>
     return identifier
-
-  let many1_till p t =
-    let cons x xs = x::xs in
-    lift2 cons p (many_till p t)
 
   let hole_parser sort dimension : (production * 'a) t t =
     let open Hole in
@@ -455,9 +454,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     fix (fun (generator : (production * 'a) t list t) ->
         if debug then Format.printf "Descends@.";
         let nested =
-          (* FIXME nested needs comments and string literals (or does it not
-             need one for string literals because we handle it in fix? Unsure,
-             couldn't come up with a CLI test. Check against test suite. *)
           if debug then Format.printf "Nested@.";
           Syntax.user_defined_delimiters
           |> List.map ~f:(fun (left_delimiter, right_delimiter) ->
@@ -507,11 +503,11 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
            "" is a valid template, or even "{", because it generates 'seq' on chain *)
         let code_holes =
           Hole.sorts ()
-          |> List.map ~f:(fun kind -> hole_parser kind Code) (* Uses attempt in alpha *)
+          (* Note: uses attempt in alpha, probably for alphanum delims*)
+          |> List.map ~f:(fun kind -> hole_parser kind Code)
           |> choice
         in
-        many @@
-        choice
+        many @@ choice
           [ code_holes
           ; raw_string_literal_parser
           ; escapable_string_literal_parser
@@ -536,59 +532,57 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       |> fun matcher ->
       match !configuration_ref.match_kind with
       | Exact ->
-        (
-          pos >>= fun start_pos ->
-          if debug then Format.printf "Yes exact@.";
-          matcher >>= fun _access_last_production_here ->
-          pos >>= fun end_pos ->
-          end_of_input >>= fun _ ->
-          record_match_context start_pos end_pos;
-          current_environment_ref := Match.Environment.create ();
-          r acc Unit)
+        pos >>= fun start_pos ->
+        if debug then Format.printf "Yes exact@.";
+        matcher >>= fun _access_last_production_here ->
+        pos >>= fun end_pos ->
+        end_of_input >>= fun _ ->
+        record_match_context start_pos end_pos;
+        current_environment_ref := Match.Environment.create ();
+        r acc Unit
       | Fuzzy ->
-        (* XXX: what is the difference does many vs many1 make here? Semantically,
-           it should mean "0 or more matching contexts" vs "1 or more matching
-           contexts". We only care about the 1 case anyway, so... *)
         let prefix =
-          skip_unit comment_parser
-          <|> skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-          <|> skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-          <|> skip_unit any_char
+          choice
+            [ skip_unit comment_parser
+            ; skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+            ; skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
+            ; skip_unit any_char
+            ]
         in
-        many (skip_unit
-                (many_till prefix
-                   (
-                     at_end_of_input >>= fun res ->
-                     if debug then Format.printf "We are at the end? %b.@." res;
-                     if res then
-                       (if debug then Format.printf "We ended@.";
-                        fail "x")
-                     else
-                       (* we found a match *)
-                       pos >>= fun start_pos ->
-                       let matched =
-                         matcher >>= fun _access_last_production_here ->
-                         if debug then Format.printf "We found a full match context@.";
-                         pos >>= fun end_pos ->
-                         record_match_context start_pos end_pos;
-                         current_environment_ref := Match.Environment.create ();
-                         return Unit
-                       in
-                       let no_match =
-                         (* reset any partial binds of holes *)
-                         if debug then Format.printf "Failed to match@.";
-                         current_environment_ref := Match.Environment.create ();
-                         (* cannot return: we must consume or else infini loop! *)
-                         (*return Unit*)
-                         fail "no match, advance."
-                       in
-                       choice [ matched; no_match ])
-                   (*<|>
-                     (end_of_input >>= fun () -> return Unit)*)
-                )
-             )
-        (*>>= fun _x -> end_of_input *)
-        >>= fun _x -> r acc Unit
+        (* many1 may be appropriate *)
+        let matches =
+          many @@
+          skip_unit @@
+          many_till prefix
+            begin
+              at_end_of_input >>= fun at_end ->
+              if debug then Format.printf "We are at the end? %b.@." at_end;
+              if at_end then fail "end"
+              else
+                (* We may have found a match *)
+                pos >>= fun start_pos ->
+                let matched =
+                  matcher >>= fun _production ->
+                  if debug then Format.printf "Full match context result@.";
+                  pos >>= fun end_pos ->
+                  record_match_context start_pos end_pos;
+                  current_environment_ref := Match.Environment.create ();
+                  return Unit
+                in
+                let no_match =
+                  (* Reset any partial binds of holes in environment. *)
+                  if debug then Format.printf "Failed to match and not at end.@.";
+                  current_environment_ref := Match.Environment.create ();
+                  (* cannot return: we must try some other parser or else we'll
+                     infini loop! We can't advance because we haven't
+                     successfuly parsed the character at the current position.
+                     So: fail and try another parser in the choice. *)
+                  fail "no match, try something else"
+                in
+                choice [ matched; no_match ]
+            end
+        in
+        matches >>= fun _ -> r acc Unit
 
   let to_template template =
     let state = Buffered.parse general_parser_generator in
@@ -596,8 +590,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     Buffered.feed state `Eof
     |> function
     | Buffered.Done ({ len; _ }, p) ->
-      if len <> 0 then failwith @@
-        Format.sprintf "Input left over in template where not expected: %d" len;
+      if len <> 0 then failwith @@ Format.sprintf "Input left over in template where not expected: %d" len;
       Ok p
     | _ -> Or_error.error_string "Template could not be parsed."
 
@@ -609,53 +602,51 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     match state with
     | Buffered.Done ({ len; off; _ }, _result) ->
       if len <> 0 then
-        (if debug then
-           Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
-         Or_error.error_string "Does not match tempalte")
+        (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
+         Or_error.error_string "Does not match template")
       else
         Ok (Match.create ()) (* Fake for now *)
     | _ -> Or_error.error_string "No matches"
 
-  let first_broken ?configuration:_ ?shift:_ template source : Match.t Or_error.t =
+  let first_is_broken ?configuration:_ ?shift:_ template source : Match.t Or_error.t =
     match to_template template with
+    | Error e -> Error e
     | Ok p ->
       begin match run_the_parser_for_first p source with
-        | Ok _ -> (* matches passed, ok to access *)
+        | Ok _ -> (* May have matches, ok to access *)
           begin
             match !matches_ref with
-            | [] -> Or_error.error_string "not really"
+            | [] -> Or_error.error_string "Empty matches"
             | hd::_ -> Ok hd
           end
-        | Error e -> (* parse failed *)
+        | Error e -> (* Matching failed *)
           Error e
       end
-    | Error e ->
-      Format.printf "Template FAIL %s@." @@ Error.to_string_hum e;
-      Error e
 
   (** Hardcoded case when template and source are empty string. The parser logic
       is too tricky for this right now. *)
   let trivial =
     let open Match in
     let open Location in
+    let open Range in
     let location =
       { offset = 0
       ; line = 1
       ; column = 1
       }
     in
-    { (Match.create ())
-      with range =
-             { match_start = location
-             ; match_end = location
-             }
-    }
+    let range =
+      { match_start = location
+      ; match_end = location
+      }
+    in
+    Match.create ~range ()
 
   let all ?configuration ~template ~source : Match.t list =
     configuration_ref := Option.value configuration ~default:!configuration_ref;
     matches_ref := [];
     if template = "" && source = "" then [trivial]
-    else match first_broken template source with
+    else match first_is_broken template source with
       | Ok _
       | Error _ -> List.rev !matches_ref
 

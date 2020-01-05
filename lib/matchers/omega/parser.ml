@@ -90,17 +90,14 @@ let spaces1 =
   take_while is_whitespace >>= fun s ->
   return (Format.sprintf "%c%s" c s)
 
-let multiline left right =
-  let module M = Parsers.Comments.Omega.Multiline.Make(struct
-      let left = left
-      let right = right
-    end)
-  in
-  M.comment
+let spaces =
+  take_while is_whitespace >>= fun s ->
+  return s
 
-let until_newline start =
-  let module M = Parsers.Comments.Omega.Until_newline.Make(struct
-      let start = start
-    end)
-  in
-  M.comment
+let identifier_parser () =
+  many (alphanum <|> char '_')
+  |>> String.of_char_list
+
+let many1_till p t =
+  let cons x xs = x::xs in
+  lift2 cons p (many_till p t)
