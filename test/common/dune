@@ -3,7 +3,7 @@
  (modules
   test_cli
   test_rewrite_rule
-; test_server
+  test_server
   test_statistics
   test_integration
   test_match_rule
