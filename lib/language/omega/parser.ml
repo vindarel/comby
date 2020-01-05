@@ -19,14 +19,17 @@ let variable_parser =
    *> (many (alphanum <|> char '_') |>> String.of_char_list)
    <* string Syntax.variable_right_delimiter)
 
-module M =
-  Parsers.String_literals.Omega.Escapable.Make(struct
-    let delimiter = {|"|}
-    let escape = '\\'
-  end)
+let escaped_char_s  =
+  any_char
+
+let char_token_s =
+  (char '\\' *> escaped_char_s >>= fun c -> return (Format.sprintf {|\%c|} c))
+  <|> (any_char |>> String.of_char)
 
 let value_parser =
-  M.base_string_literal
+  (string {|"|}
+   *> (many_till char_token_s (string {|"|})))
+  |>> String.concat
 
 let operator_parser =
   choice
