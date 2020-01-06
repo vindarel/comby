@@ -161,10 +161,25 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   end
 
   let reserved_parsers =
-    let user_defined = List.concat_map Syntax.user_defined_delimiters ~f:(fun (from, until) -> [from; until]) in
+    let user_defined_delimiters = List.concat_map Syntax.user_defined_delimiters ~f:(fun (from, until) -> [from; until]) in
+    let user_defined_escapable_strings =
+      match Syntax.escapable_string_literals with
+      | Some { delimiters; _ } ->
+        List.concat_map delimiters ~f:(fun delimiter -> [delimiter])
+      | None -> []
+    in
+    let user_defined_raw_strings =
+      List.concat_map Syntax.raw_string_literals ~f:(fun (from, until) -> [from; until])
+    in
     let hole_syntax = [ ":["; "]"; ":[["; ":]]" ] in
     let spaces = [ " "; "\n"; "\t"; "\r" ] in
-    let reserved = user_defined @ hole_syntax @ spaces in
+    let reserved =
+      user_defined_delimiters
+      @ user_defined_escapable_strings
+      @ user_defined_raw_strings
+      @ hole_syntax
+      @ spaces
+    in
     choice @@ List.map reserved ~f:string
 
   let generate_single_hole_parser () =
@@ -295,16 +310,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 r user_state (Match m)
               | Line ->
                 pos >>= fun offset ->
-                let allowed =
-                  many (any_char_except ~reserved:["\n"])
-                  |>> fun x -> [(String.of_char_list x)^"\n"]
-                in
-                allowed <* char '\n' >>= fun value ->
+                many_till_stop any_char (char '\n') >>= fun value -> char '\n' >>= fun the_newline ->
                 acc >>= fun _ ->
                 let m =
                   { offset
                   ; identifier
-                  ; text = String.concat value
+                  ; text = String.of_char_list (value @ [the_newline])
                   }
                 in
                 r user_state (Match m)
@@ -324,6 +335,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 let first_pos = ref (-1) in
                 let set_pos v = first_pos := v in
                 let get_pos () = !first_pos in
+                (* change this so that rest is not consumed *)
                 let rest =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
@@ -416,11 +428,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     string ":[" *> identifier_parser () <* string "\\n]"
 
   let blank_hole_parser () =
-    string ":[" *>
-    (many1 blank)
-    *> identifier_parser () >>= fun identifier ->
-    string "]" *>
-    return identifier
+    string ":["
+    *> many1 blank
+    *> identifier_parser ()
+    <* string "]"
 
   let hole_parser sort dimension : (production * 'a) t t =
     let open Hole in
@@ -435,18 +446,35 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let skip_signal hole = skip_unit (string "_signal_hole") |>> fun () -> (Hole hole, acc) in
     hole_parser |>> fun identifier -> skip_signal { sort; identifier; dimension; optional = false }
 
+  let reserved_holes () =
+    [ single_hole_parser ()
+    ; everything_hole_parser ()
+    ; non_space_hole_parser ()
+    ; line_hole_parser ()
+    ; blank_hole_parser ()
+    ]
+
   let generate_hole_for_literal sort ~contents ~left_delimiter ~right_delimiter () =
     let literal_holes =
       Hole.sorts ()
       |> List.map ~f:(fun kind -> hole_parser kind sort) (* Note: Uses attempt in alpha *)
       |> choice
     in
+    let _reserved_holes =
+      reserved_holes ()
+      |> List.map ~f:skip_unit
+      |> choice
+    in
     let parser =
       many @@
       choice
         [ literal_holes
-        (*FIXME: unhardcode *)
-        ; ((many1 (any_char_except ~reserved:[":["]) |>> String.of_char_list)
+        ;
+          (*FIXME: unhardcode. the many1_till_stop breaks a test, similar to the other deprecate. *)
+          (*((many1_till_stop any_char reserved_holes |>> String.of_char_list)
+            |>> generate_string_token_parser)*)
+
+          ((many1 (any_char_except ~reserved:[":["]) |>> String.of_char_list)
            |>> generate_string_token_parser)
         ]
     in
@@ -460,9 +488,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let general_parser_generator : (production * 'a) t t =
     let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
     let other =
-      (*many1_till_stop any_char reserved_parsers
-        |>> String.of_char_list
-        |>> generate_string_token_parser*)
+      (* This causes a weird test failure for custom definitions. FIX IT LATER*)
+      (*
+      many1_till_stop any_char (skip_unit reserved_parsers)
+      |>> String.of_char_list
+      |>> generate_string_token_parser
+      *)
       (many1 (any_char_except ~reserved:Deprecate.reserved) |>> String.of_char_list)
       |>> generate_string_token_parser
     in
@@ -568,8 +599,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state (`String template) in
     Buffered.feed state `Eof
     |> function
-    | Buffered.Done ({ len; _ }, p) ->
-      if len <> 0 then failwith @@ Format.sprintf "Input left over in template where not expected: %d" len;
+    | Buffered.Done ({ len; buf; _ }, p) ->
+      let c = Bigarray.Array1.unsafe_get buf (len - 1) in
+      if len <> 0 then failwith @@ Format.sprintf "Input left over in template where not expected: %d: %c" len c;
       Ok p
     | _ -> Or_error.error_string "Template could not be parsed."
 
