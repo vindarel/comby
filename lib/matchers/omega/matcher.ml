@@ -270,14 +270,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 (
                   pos >>= fun pos ->
                   if get_pos () = (-1) then set_pos pos;
-                  (* three implementations: *)
-                  (*many1 (any_char_except_parser _reserved_parsers)*)
-                  (*many1_till_stop (any_char_except ~reserved) until*)
                   let stop_at = choice [ rest; skip_unit reserved_parsers ] in
                   many1_till_stop any_char stop_at
-                  (* one that doesn't use parsers, but a finite string (benchmark this): *)
-                  (* let allowed = any_char_except ~reserved in
-                     many1 (any_allowed_except_parser allowed until) *)
                 )
                 >>= fun value ->
                 acc >>= fun _ ->
