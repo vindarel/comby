@@ -22,6 +22,9 @@ let any_char_except_parser p =
     ; (return () >>= fun _ -> if get_stop () then fail "stop" else any_char)
     ]
 
+let is_not p =
+  any_char_except_parser p
+
 let many_till_stop p t =
   let stop = ref false in
   let set_stop v = stop := v in
@@ -31,9 +34,6 @@ let many_till_stop p t =
         [ (t >>= fun _ -> (return (set_stop true)) >>= fun _ -> fail "stop")
         ; (return () >>= fun _ -> if get_stop () then return [] else lift2 cons p m)
         ])
-
-let is_not t =
-  many_till_stop any_char t
 
 let many1_till_stop p t =
   let stop = ref false in
@@ -48,8 +48,6 @@ let many1_till_stop p t =
   in
   lift2 cons one (many_till_stop p t)
 
-let is_not1 t =
-  many1_till_stop any_char t
 
 (* use many1_till_stop instead of "many1 (any_allowed_except_parser allowed until" *)
 (*

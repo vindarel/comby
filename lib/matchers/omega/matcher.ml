@@ -252,7 +252,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 let first_pos = ref (-1) in
                 let set_pos v = first_pos := v in
                 let get_pos () = !first_pos in
-                let until =
+                let rest =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
                      means there's a hole at the end without anything following
@@ -262,20 +262,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      matches of foo. *)
                   if !i = 0 then
                     (if debug then Format.printf "hole until: match to the end of this level@.";
-                     (* OR, because this is a graphical hole, it cannot go
-                        across () boundaries, so stop there if we are just a
-                        hole. I'm not sure why this isn't needed in alpha. maybe
-                        because the until consumes the spaces and stuff? *)
-                     (* any_char_except basically does is_not in alpha and does lookahead without consuming. *)
-                     end_of_input
-                     <|> (List.map Deprecate.reserved ~f:(fun r -> skip_unit (string r)) |> choice)
-                     (* we want to continue until end_of_input or when a reserved is hit, but just not
-                        consume the reserved *)
-                     (* FIXME: we should not be consuming EOF for hole templates here, just do the check and add it after wards *)
-                    )
+                     end_of_input)
                   else
                     (if debug then Format.printf "hole until: append suffix@.";
-                     acc >>= fun _ -> if debug then Format.printf "Parsed suffix@."; return ())
+                     skip_unit acc)
                 in
                 (
                   pos >>= fun pos ->
@@ -283,7 +273,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                   (* three implementations: *)
                   (*many1 (any_char_except_parser _reserved_parsers)*)
                   (*many1_till_stop (any_char_except ~reserved) until*)
-                  let stop_at = choice [ until; skip_unit reserved_parsers ] in
+                  let stop_at = choice [ rest; skip_unit reserved_parsers ] in
                   many1_till_stop any_char stop_at
                   (* one that doesn't use parsers, but a finite string (benchmark this): *)
                   (* let allowed = any_char_except ~reserved in
