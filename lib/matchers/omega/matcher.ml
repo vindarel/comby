@@ -460,7 +460,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let general_parser_generator : (production * 'a) t t =
     let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
     let other =
-      (*many1_till_stop any_char reserved_parsers*)
+      (*many1_till_stop any_char reserved_parsers
+        |>> String.of_char_list
+        |>> generate_string_token_parser*)
       (many1 (any_char_except ~reserved:Deprecate.reserved) |>> String.of_char_list)
       |>> generate_string_token_parser
     in
