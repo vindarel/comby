@@ -80,18 +80,13 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
 
 
   let multiline left right =
-    let module M = Parsers.Comments.Omega.Multiline.Make(struct
-        let left = left
-        let right = right
-      end)
-    in
+    let open Parsers.Comments.Omega.Multiline in
+    let module M = Make(struct let left = left let right = right end) in
     M.comment
 
   let until_newline start =
-    let module M = Parsers.Comments.Omega.Until_newline.Make(struct
-        let start = start
-      end)
-    in
+    let open Parsers.Comments.Omega.Until_newline in
+    let module M = Make(struct let start = start end) in
     M.comment
 
   let comment_parser =
@@ -109,21 +104,13 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   type 'a literal_parser_callback = contents:string -> left_delimiter:string -> right_delimiter:string -> 'a
 
   let escapable delimiter escape_character =
-    let module M =
-      Parsers.String_literals.Omega.Escapable.Make(struct
-        let delimiter = delimiter
-        let escape = escape_character
-      end)
-    in
+    let open Parsers.String_literals.Omega.Escapable in
+    let module M = Make(struct let delimiter = delimiter let escape = escape_character end) in
     M.base_string_literal
 
   let raw left_delimiter right_delimiter =
-    let module M =
-      Parsers.String_literals.Omega.Raw.Make(struct
-        let left_delimiter = left_delimiter
-        let right_delimiter = right_delimiter
-      end)
-    in
+    let open Parsers.String_literals.Omega.Raw in
+    let module M = Make(struct let left_delimiter = left_delimiter let right_delimiter = right_delimiter end) in
     M.base_string_literal
 
   let escapable_string_literal_parser (f : 'a literal_parser_callback) =
