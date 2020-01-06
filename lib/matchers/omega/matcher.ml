@@ -148,15 +148,24 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     | Some until -> until
     | None -> assert false
 
-  let reserved_delimiters =
-    List.concat_map Syntax.user_defined_delimiters ~f:(fun (from, until) -> [from; until])
-    |> List.append [":["; "]"]
-    |> List.append [":[["; "]]"]
+  module Deprecate = struct
+    let reserved_delimiters =
+      List.concat_map Syntax.user_defined_delimiters ~f:(fun (from, until) -> [from; until])
+      |> List.append [":["; "]"]
+      |> List.append [":[["; "]]"]
 
-  let reserved =
-    reserved_delimiters @ [" "; "\n"; "\t"; "\r"]
-    |> List.sort ~compare:(fun v2 v1 ->
-        String.length v1 - String.length v2)
+    let reserved =
+      reserved_delimiters @ [" "; "\n"; "\t"; "\r"]
+      |> List.sort ~compare:(fun v2 v1 ->
+          String.length v1 - String.length v2)
+  end
+
+  let reserved_parsers =
+    let user_defined = List.concat_map Syntax.user_defined_delimiters ~f:(fun (from, until) -> [from; until]) in
+    let hole_syntax = [ ":["; "]"; ":[["; ":]]" ] in
+    let spaces = [ " "; "\n"; "\t"; "\r" ] in
+    let reserved = user_defined @ hole_syntax @ spaces in
+    choice @@ List.map reserved ~f:string
 
   let generate_single_hole_parser () =
     (alphanum <|> char '_') |>> String.of_char
@@ -259,7 +268,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                         because the until consumes the spaces and stuff? *)
                      (* any_char_except basically does is_not in alpha and does lookahead without consuming. *)
                      end_of_input
-                     <|> (List.map reserved ~f:(fun r -> skip_unit (string r)) |> choice)
+                     <|> (List.map Deprecate.reserved ~f:(fun r -> skip_unit (string r)) |> choice)
                      (* we want to continue until end_of_input or when a reserved is hit, but just not
                         consume the reserved *)
                      (* FIXME: we should not be consuming EOF for hole templates here, just do the check and add it after wards *)
@@ -271,9 +280,14 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 (
                   pos >>= fun pos ->
                   if get_pos () = (-1) then set_pos pos;
-                  let allowed = any_char_except ~reserved in
-                  (* TODO: dimension? cf. Everything hole *)
-                  many1 (any_allowed_except_parser allowed until)
+                  (* three implementations: *)
+                  (*many1 (any_char_except_parser _reserved_parsers)*)
+                  (*many1_till_stop (any_char_except ~reserved) until*)
+                  let stop_at = choice [ until; skip_unit reserved_parsers ] in
+                  many1_till_stop any_char stop_at
+                  (* one that doesn't use parsers, but a finite string (benchmark this): *)
+                  (* let allowed = any_char_except ~reserved in
+                     many1 (any_allowed_except_parser allowed until) *)
                 )
                 >>= fun value ->
                 acc >>= fun _ ->
@@ -451,7 +465,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let general_parser_generator : (production * 'a) t t =
     let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
     let other =
-      (many1 (any_char_except ~reserved) |>> String.of_char_list)
+      (*many1_till_stop any_char reserved_parsers*)
+      (many1 (any_char_except ~reserved:Deprecate.reserved) |>> String.of_char_list)
       |>> generate_string_token_parser
     in
     let code_holes =

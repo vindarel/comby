@@ -11,16 +11,48 @@ let between left right p =
 let zero =
   fail ""
 
+let cons x xs = x :: xs
+
 let any_char_except_parser p =
-  let rewind = ref false in
-  let set_rewind v = rewind := v in
-  let get_rewind () = !rewind in
+  let stop = ref false in
+  let set_stop v = stop := v in
+  let get_stop () = !stop in
   choice
-    [ (p >>= fun _ -> (return (set_rewind true)) >>= fun _ -> fail "bad")
-    ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else any_char)
-      (* TODO this may need some kind of EOF condition to work for both template and match parsing *)
+    [ (p >>= fun _ -> (return (set_stop true)) >>= fun _ -> fail "stop")
+    ; (return () >>= fun _ -> if get_stop () then fail "stop" else any_char)
     ]
 
+let many_till_stop p t =
+  let stop = ref false in
+  let set_stop v = stop := v in
+  let get_stop () = !stop in
+  fix (fun m ->
+      choice
+        [ (t >>= fun _ -> (return (set_stop true)) >>= fun _ -> fail "stop")
+        ; (return () >>= fun _ -> if get_stop () then return [] else lift2 cons p m)
+        ])
+
+let is_not t =
+  many_till_stop any_char t
+
+let many1_till_stop p t =
+  let stop = ref false in
+  let set_stop v = stop := v in
+  let get_stop () = !stop in
+  (* one needs to fail if p isn't successful so that it doesn't consume and advance one char *)
+  let one =
+    choice
+      [ (t >>= fun _ -> (return (set_stop true)) >>= fun _ -> fail "stop")
+      ; (return () >>= fun _ -> if get_stop () then fail "stop" else p)
+      ]
+  in
+  lift2 cons one (many_till_stop p t)
+
+let is_not1 t =
+  many1_till_stop any_char t
+
+(* use many1_till_stop instead of "many1 (any_allowed_except_parser allowed until" *)
+(*
 let any_allowed_except_parser allowed p =
   let rewind = ref false in
   let set_rewind v = rewind := v in
@@ -30,6 +62,7 @@ let any_allowed_except_parser allowed p =
     ; (return () >>= fun _ -> if get_rewind () then fail "rewind" else allowed)
       (* TODO this needs some kind of EOF condition to work for both template and match parsing *)
     ]
+*)
 
 let alphanum =
   satisfy (function
@@ -47,8 +80,6 @@ let blank =
     [ char ' '
     ; char '\t'
     ]
-
-let cons x xs = x :: xs
 
 let many_till p t =
   fix (fun m -> (t *> return []) <|> (lift2 cons p m))
