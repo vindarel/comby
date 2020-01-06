@@ -238,15 +238,18 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
             begin
               match sort with
               | Alphanum ->
-                pos >>= fun pos_before ->
+                pos >>= fun offset ->
                 many1 (generate_single_hole_parser ())
                 >>= fun value ->
                 (* acc must come after in order to sat. try mimic alpha to better express this. *)
                 acc >>= fun _ ->
-                r user_state
-                  (Match
-                     { offset = pos_before; identifier; text = (String.concat value) }
-                  )
+                let m =
+                  { offset
+                  ; identifier
+                  ; text = String.concat value
+                  }
+                in
+                r user_state (Match m)
               | Non_space ->
                 if debug then Format.printf "Doing non_space@.";
                 let first_pos = ref (-1) in
@@ -283,47 +286,56 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                     set_pos (-1);
                     offset
                 in
-                r user_state
-                  (Match
-                     { offset; identifier; text = (String.of_char_list value) }
-                  )
+                let m =
+                  { offset
+                  ; identifier
+                  ; text = String.of_char_list value
+                  }
+                in
+                r user_state (Match m)
               | Line ->
-                pos >>= fun pos_before ->
+                pos >>= fun offset ->
                 let allowed =
                   many (any_char_except ~reserved:["\n"])
                   |>> fun x -> [(String.of_char_list x)^"\n"]
                 in
                 allowed <* char '\n' >>= fun value ->
                 acc >>= fun _ ->
-                r user_state
-                  (Match
-                     { offset = pos_before; identifier; text = (String.concat value) }
-                  )
+                let m =
+                  { offset
+                  ; identifier
+                  ; text = String.concat value
+                  }
+                in
+                r user_state (Match m)
               | Blank ->
-                pos >>= fun pos_before ->
+                pos >>= fun offset ->
                 many1 blank >>= fun value ->
                 acc >>= fun _ ->
-                r user_state
-                  (Match
-                     { offset = pos_before; identifier; text = (String.of_char_list value) }
-                  )
+                let m =
+                  { offset
+                  ; identifier
+                  ; text = String.of_char_list value
+                  }
+                in
+                r user_state (Match m)
               | Everything ->
                 if debug then Format.printf "do hole %s@." identifier;
                 let first_pos = ref (-1) in
                 let set_pos v = first_pos := v in
                 let get_pos () = !first_pos in
-                let until =
+                let rest =
                   (* if this is the base case (the first time we go around the
                      loop backwards, when the first parser is a hole), then it
                      means there's a hole at the end without anything following
                      it in the template. So it should always match to
                      end_of_input (not empty string) *)
                   if !i = 0 then
-                    (if debug then Format.printf "Yes this case@.";
+                    (if debug then Format.printf "hole until: match to the end of this level@.";
                      end_of_input)
                   else
-                    (if debug then Format.printf "Yes this second case@.";
-                     acc >>= fun _ -> return ())
+                    (if debug then Format.printf "hole until: append suffix@.";
+                     skip_unit acc)
                 in
                 let hole_matcher =
                   (many_till
@@ -344,7 +356,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                      (pos >>= fun pos ->
                       if get_pos () = (-1) then set_pos pos;
                       if debug then Format.printf "Pos is %d@." pos;
-                      until)
+                      rest)
                      (* it may be that the many till for the first parser
                         succeeds on 'empty string', specifically in the :[1]:[2]
                         case for :[1]. We won't capture the pos of :[1] in the
@@ -354,7 +366,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                   ) >>| String.concat
                 in
                 hole_matcher >>= fun text ->
-                (*Format.printf "have results %d@." @@ List.length results;*)
                 let offset =
                   match get_pos () with
                   | -1 -> failwith "Did not expect unset offset"
@@ -363,13 +374,13 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                     set_pos (-1);
                     offset
                 in
-                r
-                  user_state
-                  (Match
-                     { offset
-                     ; identifier
-                     ; text
-                     })
+                let m =
+                  { offset
+                  ; identifier
+                  ; text
+                  }
+                in
+                r user_state (Match m)
             end
           | Ok (_, _user_state) -> failwith "unreachable: _signal_hole parsed but not handled by Hole variant"
         in
