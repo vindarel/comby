@@ -43,13 +43,17 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   (* This is the init we will pass in with a functor later *)
   let acc = ""
 
+  let actual = ref ""
+
   (* This is the function we will pass in with a functor later *)
   let f acc (production : production) =
+    Format.printf "Called @.";
     match production with
-    | String s -> acc^s
-    | Unit
-    | Hole _
-    | Match _ -> acc
+    | String s ->
+      actual := (!actual^s); acc
+    | Unit -> Format.printf "Unit@."; acc
+    | Hole _ -> Format.printf "Hole@."; acc
+    | Match _ -> Format.printf "Match@."; acc
 
   let r acc production : (production * 'a) t =
     let open Match in
@@ -399,16 +403,19 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let generate_spaces_parser _ignored =
     (* XXX still some parts ignored in the choice case in Alpha *)
     if debug then Format.printf "Template_spaces(%s)@." _ignored;
-    spaces1 *> many comment_parser <* spaces
-    >>= fun result -> r acc (String (String.concat result))
+    spaces1 >>= fun s1 ->
+    many comment_parser >>= fun result ->
+    spaces >>= fun s2 ->
+    r acc (String (s1^String.concat result^s2))
 
   (** All code can have comments interpolated *)
   let generate_string_token_parser str =
     if debug then Format.printf "Template_string(%s)@." str;
     many comment_parser
-    *> string str
-    *> many comment_parser
-    >>= fun result -> r acc (String (String.concat result))
+    >>= fun s1 ->
+    string str >>= fun result ->
+    many comment_parser >>= fun s2 ->
+    r acc (String (String.concat s1 ^ result ^ String.concat s2))
 
   let single_hole_parser () =
     string ":[[" *> identifier_parser () <* string "]]"
@@ -595,8 +602,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state (`String source) in
     let state = Buffered.feed state `Eof in
     match state with
-    | Buffered.Done ({ len; off; _ }, (_, result_string)) ->
-      Format.printf "Result string:@.---@.%s---@." result_string;
+    | Buffered.Done ({ len; off; _ }, (_, _result_string)) ->
+      Format.printf "Result string:@.---@.%s---@." !actual;
       if len <> 0 then
         (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
          Or_error.error_string "Does not match template")
