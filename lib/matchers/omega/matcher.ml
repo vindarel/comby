@@ -41,11 +41,15 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   include Info
 
   (* This is the init we will pass in with a functor later *)
-  let acc = 0
+  let acc = ""
 
   (* This is the function we will pass in with a functor later *)
-  let f acc _production =
-    acc + 1
+  let f acc (production : production) =
+    match production with
+    | String s -> acc^s
+    | Unit
+    | Hole _
+    | Match _ -> acc
 
   let r acc production : (production * 'a) t =
     let open Match in
@@ -474,12 +478,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let general_parser_generator : (production * 'a) t t =
     let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
     let other =
-      (* This causes a weird test failure for custom definitions. FIX IT LATER *)
-      (*
-      many1_till_stop any_char (skip_unit reserved_parsers)
-      |>> String.of_char_list
-      |>> generate_string_token_parser
-      *)
       (many1 (Parser.Deprecate.any_char_except ~reserved:Deprecate.reserved) |>> String.of_char_list)
       |>> generate_string_token_parser
     in
@@ -597,7 +595,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state (`String source) in
     let state = Buffered.feed state `Eof in
     match state with
-    | Buffered.Done ({ len; off; _ }, _result) ->
+    | Buffered.Done ({ len; off; _ }, (_, result_string)) ->
+      Format.printf "Result string:@.---@.%s---@." result_string;
       if len <> 0 then
         (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
          Or_error.error_string "Does not match template")
