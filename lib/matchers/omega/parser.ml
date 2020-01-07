@@ -13,17 +13,23 @@ let zero =
 
 let cons x xs = x :: xs
 
-let any_char_except_parser p =
+let debug = true
+
+let dont_use_any_char_except_parser p =
+  if debug then Format.printf "Entered@.";
   let stop = ref false in
   let set_stop v = stop := v in
   let get_stop () = !stop in
-  choice
-    [ (p >>= fun _ -> (return (set_stop true)) >>= fun _ -> fail "stop")
-    ; (return () >>= fun _ -> if get_stop () then fail "stop" else any_char)
-    ]
+  let c =
+    choice
+      [ (p >>= fun reserved -> pos >>= fun po -> (if debug then Format.printf "1. stop @@ %s @@ %d@." reserved po; return (set_stop true)) >>= fun _ -> fail "stop")
+      ; (return () >>= fun _ -> Format.printf "X@."; if get_stop () then (if debug then Format.printf "2. stop@."; fail "stop") else any_char)
+      ]
+  in
+  c >>= fun c' -> if debug then Format.printf "Parsed: %c@." c'; if debug then Format.printf "Exit@."; return c'
 
-let is_not p =
-  any_char_except_parser p
+let dont_use_is_not p =
+  dont_use_any_char_except_parser p
 
 let many_till_stop p t =
   let stop = ref false in
@@ -88,27 +94,29 @@ let many1_till p t =
 let skip_unit p =
   p |>> ignore
 
-(* XXX can shortcircuit *)
-(* what if you hit a reserved
-   seqence "{" and then attempt
-   ":[[" and then say "end of
-   input" and then move ahead any_char. not good.
-   going from longest to shortest works though *)
-let any_char_except ~reserved =
-  List.fold reserved
-    ~init:(return `OK)
-    ~f:(fun acc reserved_sequence ->
-        option `End_of_input
-          (peek_string (String.length reserved_sequence)
-           >>= fun s ->
-           if s = reserved_sequence then
-             return `Reserved_sequence
-           else
-             acc))
-  >>= function
-  | `OK -> any_char
-  | `End_of_input -> any_char
-  | `Reserved_sequence -> fail "reserved sequence hit"
+module Deprecate = struct
+  (* XXX can shortcircuit *)
+  (* what if you hit a reserved
+     seqence "{" and then attempt
+     ":[[" and then say "end of
+     input" and then move ahead any_char. not good.
+     going from longest to shortest works though *)
+  let any_char_except ~reserved =
+    List.fold reserved
+      ~init:(return `OK)
+      ~f:(fun acc reserved_sequence ->
+          option `End_of_input
+            (peek_string (String.length reserved_sequence)
+             >>= fun s ->
+             if s = reserved_sequence then
+               return `Reserved_sequence
+             else
+               acc))
+    >>= function
+    | `OK -> any_char
+    | `End_of_input -> any_char
+    | `Reserved_sequence -> fail "reserved sequence hit"
+end
 
 (** must have at least one, otherwise spins on
     the empty string *)

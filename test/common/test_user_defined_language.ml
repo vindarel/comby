@@ -111,7 +111,7 @@ let%expect_test "user_defined_language_from_json_optional_escapable" =
     |> Result.ok_or_failwith
     |> Matchers.create
   in
-  let source = {|""|} in
+  let source = "" in
   let match_template = {|""|} in
   let rewrite_template = {|""|} in
   run user_lang source match_template rewrite_template ;

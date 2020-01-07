@@ -202,7 +202,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     in
     fix (fun grammar ->
         let delimsx = between_nested_delims (many grammar) in
-        let other = any_char_except ~reserved |>> String.of_char in
+        let other = Parser.Deprecate.any_char_except ~reserved |>> String.of_char in
         choice
           [ comment_parser
           ; raw_string_literal_parser (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents)
@@ -220,11 +220,11 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       choice
         [ (string (Format.sprintf "%c%s" escape_character right_delimiter))
         ; (string (Format.sprintf "%c%c" escape_character escape_character))
-        ; (any_char_except ~reserved:[right_delimiter] |>> String.of_char)
+        ; (Parser.Deprecate.any_char_except ~reserved:[right_delimiter] |>> String.of_char)
         ]
 
   let raw_literal_grammar ~right_delimiter =
-    any_char_except ~reserved:[right_delimiter] |>> String.of_char
+    (Parser.Deprecate.any_char_except ~reserved:[right_delimiter] |>> String.of_char)
 
   let sequence_chain ?left_delimiter:_ ?right_delimiter (p_list : (production * 'a) t list) =
     if debug then Format.printf "Sequence chain p_list size: %d@." @@ List.length p_list;
@@ -276,7 +276,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                   pos >>= fun pos ->
                   if get_pos () = (-1) then set_pos pos;
                   let stop_at = choice [ rest; skip_unit reserved_parsers ] in
-                  many1_till_stop any_char stop_at
+                  many1_till_stop any_char stop_at (* Beware of this use. *)
                 )
                 >>= fun value ->
                 acc >>= fun _ ->
@@ -297,12 +297,16 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 r user_state (Match m)
               | Line ->
                 pos >>= fun offset ->
-                many_till_stop any_char (char '\n') >>= fun value -> char '\n' >>= fun the_newline ->
+                let allowed =
+                  many (Parser.Deprecate.any_char_except ~reserved:["\n"])
+                  |>> fun x -> [(String.of_char_list x)^"\n"]
+                in
+                allowed <* char '\n' >>= fun value ->
                 acc >>= fun _ ->
                 let m =
                   { offset
                   ; identifier
-                  ; text = String.of_char_list (value @ [the_newline])
+                  ; text = String.concat value
                   }
                 in
                 r user_state (Match m)
@@ -456,12 +460,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       many @@
       choice
         [ literal_holes
-        ;
-          (*FIXME: unhardcode. the many1_till_stop breaks a test, similar to the other deprecate. *)
-          (*((many1_till_stop any_char reserved_holes |>> String.of_char_list)
-            |>> generate_string_token_parser)*)
-
-          ((many1 (any_char_except ~reserved:[":["]) |>> String.of_char_list)
+        ; ((many1 (Parser.Deprecate.any_char_except ~reserved:[":["]) |>> String.of_char_list)
            |>> generate_string_token_parser)
         ]
     in
@@ -475,13 +474,13 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let general_parser_generator : (production * 'a) t t =
     let spaces : (production * 'a) t t = spaces1 |>> generate_spaces_parser in
     let other =
-      (* This causes a weird test failure for custom definitions. FIX IT LATER*)
+      (* This causes a weird test failure for custom definitions. FIX IT LATER *)
       (*
       many1_till_stop any_char (skip_unit reserved_parsers)
       |>> String.of_char_list
       |>> generate_string_token_parser
       *)
-      (many1 (any_char_except ~reserved:Deprecate.reserved) |>> String.of_char_list)
+      (many1 (Parser.Deprecate.any_char_except ~reserved:Deprecate.reserved) |>> String.of_char_list)
       |>> generate_string_token_parser
     in
     let code_holes =
