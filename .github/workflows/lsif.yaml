@@ -20,7 +20,8 @@ jobs:
 #       uses: mxschmitt/action-tmate@v1
       - run: opam exec -- lsif-ocaml-dump
 #     - run: opam exec -- lsif-ocaml -only-type-hovers > dump.lsif
-      - run: opam exec -- lsif-ocaml > dump.lsif
+      - run: opam exec -- lsif-ocaml -only-definitions > dump.lsif
+#     - run: opam exec -- lsif-ocaml > dump.lsif
       - name: Upload LSIF data
         uses: sourcegraph/lsif-upload-action@master
         continue-on-error: true
