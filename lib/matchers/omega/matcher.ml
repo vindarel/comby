@@ -70,12 +70,12 @@ let record_match_context pos_before pos_after =
       }
   in
   (* substitute now *)
-  Format.printf "Curr env: %s@." @@ Match.Environment.to_string !current_environment_ref;
+  if debug then Format.printf "Curr env: %s@." @@ Match.Environment.to_string !current_environment_ref;
   let result, _ = substitute !rewrite_template !current_environment_ref in
   (* Don't just append, but replace the match context including constant
      strings. I.e., somewhere where we are appending the parth that matched, it
      shouldn't, and instead just ignore. *)
-  Format.printf "SAppending %S@." result;
+  if debug then Format.printf "SAppending %S@." result;
   actual := (!actual)^result;
   matches_ref := match_context :: !matches_ref
 
@@ -89,7 +89,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let f acc (production : production) =
     match production with
     | String s -> (* unmatched, append when we rewrite *)
-      Format.printf "Appending %S@." s;
+      if debug then Format.printf "Appending %S@." s;
       actual := (!actual^s); acc
     | Template_string _ -> acc (* matched. if a constant string in the template is matched, don't append it *)
     | Unit -> if debug then Format.printf "Unit@."; acc
@@ -646,7 +646,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state `Eof in
     match state with
     | Buffered.Done ({ len; off; _ }, (_, _result_string)) ->
-      Format.printf "Result string:@.---@.%s---@." !actual;
+      if debug then Format.printf "Result string:@.---@.%s---@." !actual;
       if len <> 0 then
         (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
          Or_error.error_string "Does not match template")
