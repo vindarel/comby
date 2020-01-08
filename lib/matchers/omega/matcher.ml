@@ -72,6 +72,10 @@ let record_match_context pos_before pos_after =
   (* substitute now *)
   Format.printf "Curr env: %s@." @@ Match.Environment.to_string !current_environment_ref;
   let result, _ = substitute !rewrite_template !current_environment_ref in
+  (* Don't just append, but replace the match context including constant
+     strings. I.e., somewhere where we are appending the parth that matched, it
+     shouldn't, and instead just ignore. *)
+  Format.printf "SAppending %S@." result;
   actual := (!actual)^result;
   matches_ref := match_context :: !matches_ref
 
@@ -84,8 +88,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   (* This is the function we will pass in with a functor later *)
   let f acc (production : production) =
     match production with
-    | String s ->
+    | String s -> (* unmatched, append when we rewrite *)
+      Format.printf "Appending %S@." s;
       actual := (!actual^s); acc
+    | Template_string _ -> acc (* matched. if a constant string in the template is matched, don't append it *)
     | Unit -> if debug then Format.printf "Unit@."; acc
     | Hole _ -> if debug then Format.printf "Hole@."; acc
     | Match _ ->
@@ -443,7 +449,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     spaces1 >>= fun s1 ->
     many comment_parser >>= fun result ->
     spaces >>= fun s2 ->
-    r acc (String (s1^String.concat result^s2))
+    r acc (Template_string (s1^String.concat result^s2))
 
   (** All code can have comments interpolated *)
   let generate_string_token_parser str =
@@ -452,7 +458,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     >>= fun s1 ->
     string str >>= fun result ->
     many comment_parser >>= fun s2 ->
-    r acc (String (String.concat s1 ^ result ^ String.concat s2))
+    r acc (Template_string (String.concat s1 ^ result ^ String.concat s2))
 
   let single_hole_parser () =
     string ":[[" *> identifier_parser () <* string "]]"
@@ -541,9 +547,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
               if debug then Format.printf "G size: %d; delim %s@." (List.length g) left_delimiter;
               return @@
               sequence_chain @@
-              [string left_delimiter >>= fun result -> r acc (String result)]
+              [string left_delimiter >>= fun result -> r acc (Template_string result)]
               @ g
-              @ [ string right_delimiter >>= fun result -> r acc (String result)])
+              @ [ string right_delimiter >>= fun result -> r acc (Template_string result)])
         in
         many @@ choice
           [ code_holes

@@ -86,6 +86,7 @@ module Omega = struct
   type production =
     | Unit
     | String of string
+    | Template_string of string
     | Hole of hole
     | Match of omega_match_production
 end
