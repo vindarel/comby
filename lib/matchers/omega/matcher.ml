@@ -76,7 +76,7 @@ let record_match_context pos_before pos_after =
      strings. I.e., somewhere where we are appending the parth that matched, it
      shouldn't, and instead just ignore. *)
   if debug then Format.printf "SAppending %S@." result;
-  actual := (!actual)^result;
+  if debug then actual := (!actual)^result;
   matches_ref := match_context :: !matches_ref
 
 module Make (Syntax : Syntax.S) (Info : Info.S) = struct
@@ -90,7 +90,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     match production with
     | String s -> (* unmatched, append when we rewrite *)
       if debug then Format.printf "Appending %S@." s;
-      actual := (!actual^s); acc
+      if debug then actual := (!actual^s); acc
     | Template_string _ -> acc (* matched. if a constant string in the template is matched, don't append it *)
     | Unit -> if debug then Format.printf "Unit@."; acc
     | Hole _ -> if debug then Format.printf "Hole@."; acc
