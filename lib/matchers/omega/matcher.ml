@@ -47,13 +47,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
 
   (* This is the function we will pass in with a functor later *)
   let f acc (production : production) =
-    Format.printf "Called @.";
     match production with
     | String s ->
       actual := (!actual^s); acc
-    | Unit -> Format.printf "Unit@."; acc
-    | Hole _ -> Format.printf "Hole@."; acc
-    | Match _ -> Format.printf "Match@."; acc
+    | Unit -> if debug then Format.printf "Unit@."; acc
+    | Hole _ -> if debug then Format.printf "Hole@."; acc
+    | Match _ -> if debug then Format.printf "Match@."; acc
 
   let r acc production : (production * 'a) t =
     let open Match in
@@ -603,7 +602,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state `Eof in
     match state with
     | Buffered.Done ({ len; off; _ }, (_, _result_string)) ->
-      Format.printf "Result string:@.---@.%s---@." !actual;
+      if debug then Format.printf "Result string:@.---@.%s---@." !actual;
       if len <> 0 then
         (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
          Or_error.error_string "Does not match template")
