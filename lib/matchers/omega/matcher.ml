@@ -18,6 +18,39 @@ let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
 
+let actual = ref ""
+
+let rewrite_template = ref ""
+
+let substitute template env =
+  let substitution_formats =
+    [ ":[ ", "]"
+    ; ":[", ".]"
+    ; ":[", "\\n]"
+    ; ":[[", "]]"
+    ; ":[", "]"
+    (* optional syntax *)
+    ; ":[? ", "]"
+    ; ":[ ?", "]"
+    ; ":[?", ".]"
+    ; ":[?", "\\n]"
+    ; ":[[?", "]]"
+    ; ":[?", "]"
+    ]
+  in
+  Match.Environment.vars env
+  |> List.fold ~init:(template, []) ~f:(fun (acc, vars) variable ->
+      match Match.Environment.lookup env variable with
+      | Some value ->
+        List.find_map substitution_formats ~f:(fun (left,right) ->
+            let pattern = left^variable^right in
+            if Option.is_some (String.substr_index template ~pattern) then
+              Some (String.substr_replace_all acc ~pattern ~with_:value, variable::vars)
+            else
+              None)
+        |> Option.value ~default:(acc,vars)
+      | None -> acc, vars)
+
 let record_match_context pos_before pos_after =
   let open Match.Location in
   if debug then Format.printf "match context start pos: %d@." pos_before;
@@ -29,12 +62,17 @@ let record_match_context pos_before pos_after =
   let match_context =
     let match_start = { offset = pos_before; line = 1; column = pos_before + 1 } in
     let match_end = { offset = pos_after; line = 1; column = pos_after + 1 } in
+    let text = extract_matched_text !source_ref match_start match_end in
     Match.
       { range = { match_start; match_end }
       ; environment = !current_environment_ref
-      ; matched = extract_matched_text !source_ref match_start match_end
+      ; matched = text
       }
   in
+  (* substitute now *)
+  Format.printf "Curr env: %s@." @@ Match.Environment.to_string !current_environment_ref;
+  let result, _ = substitute !rewrite_template !current_environment_ref in
+  actual := (!actual)^result;
   matches_ref := match_context :: !matches_ref
 
 module Make (Syntax : Syntax.S) (Info : Info.S) = struct
@@ -43,8 +81,6 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   (* This is the init we will pass in with a functor later *)
   let acc = ""
 
-  let actual = ref ""
-
   (* This is the function we will pass in with a functor later *)
   let f acc (production : production) =
     match production with
@@ -52,7 +88,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       actual := (!actual^s); acc
     | Unit -> if debug then Format.printf "Unit@."; acc
     | Hole _ -> if debug then Format.printf "Hole@."; acc
-    | Match _ -> if debug then Format.printf "Match@."; acc
+    | Match _ ->
+      if debug then Format.printf "Match@.";
+      acc
 
   let r acc production : (production * 'a) t =
     let open Match in
@@ -543,17 +581,16 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
       | Fuzzy ->
         let prefix =
           choice
-            [ skip_unit comment_parser
-            ; skip_unit (raw_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-            ; skip_unit (escapable_string_literal_parser (fun ~contents:_ ~left_delimiter:_ ~right_delimiter:_ -> ()))
-            ; skip_unit any_char
+            [ comment_parser
+            ; (raw_string_literal_parser (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents))
+            ; (escapable_string_literal_parser (fun ~contents ~left_delimiter:_ ~right_delimiter:_ -> contents))
+            ; any_char |>> Char.to_string
             ]
         in
         (* many1 may be appropriate *)
         let matches =
           many @@
-          skip_unit @@
-          many_till prefix
+          many_till (prefix >>= fun s -> r acc (String s))
             begin
               at_end_of_input >>= fun at_end ->
               if debug then Format.printf "We are at the end? %b.@." at_end;
@@ -562,12 +599,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 (* We may have found a match *)
                 pos >>= fun start_pos ->
                 let matched =
-                  matcher >>= fun _production ->
+                  matcher >>= fun production ->
                   if debug then Format.printf "Full match context result@.";
                   pos >>= fun end_pos ->
                   record_match_context start_pos end_pos;
                   current_environment_ref := Match.Environment.create ();
-                  return Unit
+                  return production
                 in
                 let no_match =
                   (* Reset any partial binds of holes in environment. *)
@@ -582,7 +619,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
                 choice [ matched; no_match ]
             end
         in
-        matches >>= fun _ -> r acc Unit
+        matches >>= fun _result ->
+        r acc Unit
 
   let to_template template =
     let state = Buffered.parse general_parser_generator in
@@ -602,7 +640,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state `Eof in
     match state with
     | Buffered.Done ({ len; off; _ }, (_, _result_string)) ->
-      if debug then Format.printf "Result string:@.---@.%s---@." !actual;
+      Format.printf "Result string:@.---@.%s---@." !actual;
       if len <> 0 then
         (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
          Or_error.error_string "Does not match template")
@@ -624,6 +662,9 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         | Error e -> (* Matching failed *)
           Error e
       end
+
+  let set_rewrite_template rewrite_template' =
+    rewrite_template := rewrite_template'
 
   (** Hardcoded case when template and source are empty string. The parser logic
       is too tricky for this right now. *)

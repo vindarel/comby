@@ -106,6 +106,8 @@ module Matcher = struct
       -> string
       -> Match.t Or_error.t
 
+    val set_rewrite_template : string -> unit
+
     val all
       :  ?configuration:Configuration.t
       -> template:string
