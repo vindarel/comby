@@ -14,6 +14,10 @@ open Language
 
 module Command_configuration = Command_configuration
 
+let skip_line_col_compute =
+  Sys.getenv "SKIP_LINE_COL_COMPUTE_COMBY"
+  |> Option.is_some
+
 let infer_equality_constraints environment =
   let vars = Environment.vars environment in
   List.fold vars ~init:[] ~f:(fun acc var ->
@@ -77,8 +81,11 @@ let timed_run matcher ?rewrite_template ?substitute_in_place ?rule ~configuratio
    | None -> ());
   let matches = Matcher.all ~configuration ~template ~source in
   let rule = Option.value rule ~default:[Ast.True] in
-  apply_rule ?substitute_in_place matcher rule matches
-  |> List.map ~f:(update_match source)
+  let matches = apply_rule ?substitute_in_place matcher rule matches in
+  if skip_line_col_compute then
+    matches
+  else
+    List.map matches ~f:(update_match source)
 
 let debug =
   Sys.getenv "DEBUG_COMBY"

@@ -18,7 +18,11 @@ let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
 
-let actual = ref ""
+let rewrite =
+  Sys.getenv "REWRITE"
+  |> Option.is_some
+
+let actual = Buffer.create 10
 
 let rewrite_template = ref ""
 
@@ -75,8 +79,7 @@ let record_match_context pos_before pos_after =
   (* Don't just append, but replace the match context including constant
      strings. I.e., somewhere where we are appending the parth that matched, it
      shouldn't, and instead just ignore. *)
-  if debug then Format.printf "SAppending %S@." result;
-  if debug then actual := (!actual)^result;
+  if rewrite then Buffer.add_string actual result;
   matches_ref := match_context :: !matches_ref
 
 module Make (Syntax : Syntax.S) (Info : Info.S) = struct
@@ -89,8 +92,8 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
   let f acc (production : production) =
     match production with
     | String s -> (* unmatched, append when we rewrite *)
-      if debug then Format.printf "Appending %S@." s;
-      if debug then actual := (!actual^s); acc
+      if rewrite then Buffer.add_string actual s;
+      acc
     | Template_string _ -> acc (* matched. if a constant string in the template is matched, don't append it *)
     | Unit -> if debug then Format.printf "Unit@."; acc
     | Hole _ -> if debug then Format.printf "Hole@."; acc
@@ -646,7 +649,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     let state = Buffered.feed state `Eof in
     match state with
     | Buffered.Done ({ len; off; _ }, (_, _result_string)) ->
-      if debug then Format.printf "Result string:@.---@.%s---@." !actual;
+      if rewrite then Format.eprintf "Result string:@.---@.%s---@." @@ Buffer.contents actual;
       if len <> 0 then
         (if debug then Format.eprintf "Input left over in parse where not expected: off(%d) len(%d)" off len;
          Or_error.error_string "Does not match template")
