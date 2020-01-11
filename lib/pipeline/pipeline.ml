@@ -42,20 +42,6 @@ let apply_rule ?(substitute_in_place = true) matcher rule matches =
       (if sat then env else None)
       >>| fun environment -> { matched with environment })
 
-let line_map source =
-  let lines = String.split_lines source in
-  let a = Array.create ~len:(List.length lines) (Int.max_value) in
-  if debug then Format.printf "%d lines@." (List.length lines);
-  let _ =
-    List.foldi ~init:0 lines ~f:(fun i sum line ->
-        let len = String.length line in
-        let acc = sum + len + 1 in (* add 1 for \n *)
-        a.(i) <- acc;
-        acc)
-  in
-  if debug then Format.printf "OK@.";
-  a
-
 let line_map' source =
   let total_len = String.length source in
   if debug then Format.printf "Total len: %d@." total_len;
