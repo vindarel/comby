@@ -60,20 +60,20 @@ let line_map source =
 
 let line_map' source =
   let total_len = String.length source in
-  (*Format.printf "Total len: %d@." total_len;*)
+  if debug then Format.printf "Total len: %d@." total_len;
   let num_lines = List.length @@ String.split_on_chars source ~on:['\n'] in
   let a = Array.create ~len:num_lines (Int.max_value) in
   let line_index = ref 0 in
   let f sum char =
     match char with
     | '\n' ->
-      a.(!line_index) <- sum;
+      a.(!line_index) <- sum + 1;
       line_index := !line_index + 1;
       sum + 1
     | _ ->
       if sum = total_len - 1 then (* if it's the last char and wasn't a newline, record this offset *)
-        (Format.printf "Yes for %d@." sum;
-         a.(!line_index) <- sum;
+        (if debug then Format.printf "Yes for %d@." sum;
+         a.(!line_index) <- sum + 1; (* there is not test that would fail if this was only 'sum'. be ware *)
          sum + 1)
       else
         sum + 1
@@ -82,7 +82,7 @@ let line_map' source =
   a
 
 let rec binary_search a value low high =
-  if high = low then
+  if high <= low then
     low
   else let mid = (low + high) / 2 in
     if a.(mid) > value then
@@ -93,62 +93,30 @@ let rec binary_search a value low high =
       mid
 
 let compute_line_col' a offset =
+  let offset = offset - 1 in (* make offset 0 based *)
+  if debug then Format.printf "init w: %d %d %d@." offset 0 (Array.length a);
   let line = binary_search a offset 0 (Array.length a) in
   let line = if a.(line) < offset then line + 1 else line in
-  (*Format.printf "binary searched line: %d@." line;
-    Format.printf "a.(line): %d@." a.(line);
-    Format.printf "offset: %d@." offset;*)
+  if debug then Format.printf "binary searched line: %d@." line;
+  if debug then Format.printf "a.(line): %d@." a.(line);
+  if debug then Format.printf "offset: %d@." offset;
   let _col = if line = 0 then offset else offset - a.(line - 1) in
-  (*Format.printf "COL: %d@." _col;*)
-  line + 1, _col
+  if debug then Format.printf "COL: %d@." _col;
+  line + 1, _col + 1 (* one-based output *) + 1 (* take into account original 1-based offset *)
 
 let update_match' a m =
   let update_range range =
-    let update_location loc =
+    let update_location k loc =
       let open Location in
       let line, column = compute_line_col' a loc.offset in
-      (*Format.printf "> %d:%d for offset %d@." line column loc.offset;*)
-      { loc with line; column}
+      if debug then Format.printf "> %d:%d for offset %d@." line column loc.offset;
+      match k with
+      | `Start -> { loc with line; column }
+      | `End -> { loc with line; column = column }
     in
     let open Range in
-    let match_start = update_location range.match_start in
-    let match_end = update_location range.match_end in
-    { match_start; match_end }
-  in
-  let update_environment env =
-    List.fold (Environment.vars env) ~init:env ~f:(fun env var ->
-        let open Option in
-        let updated =
-          Environment.lookup_range env var
-          >>| update_range
-          >>| Environment.update_range env var
-        in
-        Option.value_exn updated)
-  in
-  let range = update_range m.range in
-  let environment = update_environment m.environment in
-  { m with range; environment }
-
-let compute_line_col source offset =
-  let f (offset, line, col) char =
-    match offset, char with
-    | 0, _ -> (0, line, col)
-    | _, '\n' -> (offset - 1, line + 1, 1)
-    | _ -> (offset - 1, line, col + 1)
-  in
-  let _, line, col = String.fold ~init:(offset, 1, 1) ~f source in
-  line, col
-
-let update_match source m =
-  let update_range range =
-    let update_location loc =
-      let open Location in
-      let line, column = compute_line_col source loc.offset in
-      { loc with line; column}
-    in
-    let open Range in
-    let match_start = update_location range.match_start in
-    let match_end = update_location range.match_end in
+    let match_start = update_location `Start range.match_start in
+    let match_end = update_location `End range.match_end in
     { match_start; match_end }
   in
   let update_environment env =
@@ -179,7 +147,7 @@ let timed_run matcher ?rewrite_template ?substitute_in_place ?rule ~configuratio
     if debug then Array.iteri a ~f:(fun i e -> Format.printf "%d: %d@." i e);
     List.map matches ~f:(update_match' a)
   else
-    List.map matches ~f:(update_match source)
+    failwith "restore"
 
 let debug =
   Sys.getenv "DEBUG_COMBY"
