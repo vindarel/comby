@@ -14,9 +14,15 @@ open Language
 
 module Command_configuration = Command_configuration
 
+let debug =
+  Sys.getenv "DEBUG_COMBY"
+  |> Option.is_some
+
 let skip_line_col_compute =
   Sys.getenv "SKIP_LINE_COL_COMPUTE_COMBY"
   |> Option.is_some
+
+let skip_line_col_compute = true
 
 let infer_equality_constraints environment =
   let vars = Environment.vars environment in
@@ -37,6 +43,91 @@ let apply_rule ?(substitute_in_place = true) matcher rule matches =
       let sat, env =  Rule.apply ~substitute_in_place ~matcher rule environment in
       (if sat then env else None)
       >>| fun environment -> { matched with environment })
+
+let line_map source =
+  let lines = String.split_lines source in
+  let a = Array.create ~len:(List.length lines) (Int.max_value) in
+  if debug then Format.printf "%d lines@." (List.length lines);
+  let _ =
+    List.foldi ~init:0 lines ~f:(fun i sum line ->
+        let len = String.length line in
+        let acc = sum + len + 1 in (* add 1 for \n *)
+        a.(i) <- acc;
+        acc)
+  in
+  if debug then Format.printf "OK@.";
+  a
+
+let line_map' source =
+  let total_len = String.length source in
+  (*Format.printf "Total len: %d@." total_len;*)
+  let num_lines = List.length @@ String.split_on_chars source ~on:['\n'] in
+  let a = Array.create ~len:num_lines (Int.max_value) in
+  let line_index = ref 0 in
+  let f sum char =
+    match char with
+    | '\n' ->
+      a.(!line_index) <- sum;
+      line_index := !line_index + 1;
+      sum + 1
+    | _ ->
+      if sum = total_len - 1 then (* if it's the last char and wasn't a newline, record this offset *)
+        (Format.printf "Yes for %d@." sum;
+         a.(!line_index) <- sum;
+         sum + 1)
+      else
+        sum + 1
+  in
+  let _ = String.fold source ~init:0 ~f in
+  a
+
+let rec binary_search a value low high =
+  if high = low then
+    low
+  else let mid = (low + high) / 2 in
+    if a.(mid) > value then
+      binary_search a value low (mid - 1)
+    else if a.(mid) < value then
+      binary_search a value (mid + 1) high
+    else
+      mid
+
+let compute_line_col' a offset =
+  let line = binary_search a offset 0 (Array.length a) in
+  let line = if a.(line) < offset then line + 1 else line in
+  (*Format.printf "binary searched line: %d@." line;
+    Format.printf "a.(line): %d@." a.(line);
+    Format.printf "offset: %d@." offset;*)
+  let _col = if line = 0 then offset else offset - a.(line - 1) in
+  (*Format.printf "COL: %d@." _col;*)
+  line + 1, _col
+
+let update_match' a m =
+  let update_range range =
+    let update_location loc =
+      let open Location in
+      let line, column = compute_line_col' a loc.offset in
+      (*Format.printf "> %d:%d for offset %d@." line column loc.offset;*)
+      { loc with line; column}
+    in
+    let open Range in
+    let match_start = update_location range.match_start in
+    let match_end = update_location range.match_end in
+    { match_start; match_end }
+  in
+  let update_environment env =
+    List.fold (Environment.vars env) ~init:env ~f:(fun env var ->
+        let open Option in
+        let updated =
+          Environment.lookup_range env var
+          >>| update_range
+          >>| Environment.update_range env var
+        in
+        Option.value_exn updated)
+  in
+  let range = update_range m.range in
+  let environment = update_environment m.environment in
+  { m with range; environment }
 
 let compute_line_col source offset =
   let f (offset, line, col) char =
@@ -83,7 +174,10 @@ let timed_run matcher ?rewrite_template ?substitute_in_place ?rule ~configuratio
   let rule = Option.value rule ~default:[Ast.True] in
   let matches = apply_rule ?substitute_in_place matcher rule matches in
   if skip_line_col_compute then
-    matches
+    let a = line_map' source in
+    if debug then Format.printf "Line map:@.";
+    if debug then Array.iteri a ~f:(fun i e -> Format.printf "%d: %d@." i e);
+    List.map matches ~f:(update_match' a)
   else
     List.map matches ~f:(update_match source)
 
