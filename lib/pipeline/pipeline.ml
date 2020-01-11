@@ -18,11 +18,9 @@ let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
 
-let skip_line_col_compute =
-  Sys.getenv "SKIP_LINE_COL_COMPUTE_COMBY"
+let slow_line_col_compute =
+  Sys.getenv "SLOW_LINE_COL_COMPUTE_COMBY"
   |> Option.is_some
-
-let skip_line_col_compute = true
 
 let infer_equality_constraints environment =
   let vars = Environment.vars environment in
@@ -106,17 +104,51 @@ let compute_line_col' a offset =
 
 let update_match' a m =
   let update_range range =
-    let update_location k loc =
+    let update_location loc =
       let open Location in
       let line, column = compute_line_col' a loc.offset in
       if debug then Format.printf "> %d:%d for offset %d@." line column loc.offset;
-      match k with
-      | `Start -> { loc with line; column }
-      | `End -> { loc with line; column = column }
+      { loc with line; column }
     in
     let open Range in
-    let match_start = update_location `Start range.match_start in
-    let match_end = update_location `End range.match_end in
+    let match_start = update_location range.match_start in
+    let match_end = update_location range.match_end in
+    { match_start; match_end }
+  in
+  let update_environment env =
+    List.fold (Environment.vars env) ~init:env ~f:(fun env var ->
+        let open Option in
+        let updated =
+          Environment.lookup_range env var
+          >>| update_range
+          >>| Environment.update_range env var
+        in
+        Option.value_exn updated)
+  in
+  let range = update_range m.range in
+  let environment = update_environment m.environment in
+  { m with range; environment }
+
+let compute_line_col source offset =
+  let f (offset, line, col) char =
+    match offset, char with
+    | 0, _ -> (0, line, col)
+    | _, '\n' -> (offset - 1, line + 1, 1)
+    | _ -> (offset - 1, line, col + 1)
+  in
+  let _, line, col = String.fold ~init:(offset, 1, 1) ~f source in
+  line, col
+
+let update_match source m =
+  let update_range range =
+    let update_location loc =
+      let open Location in
+      let line, column = compute_line_col source loc.offset in
+      { loc with line; column}
+    in
+    let open Range in
+    let match_start = update_location range.match_start in
+    let match_end = update_location range.match_end in
     { match_start; match_end }
   in
   let update_environment env =
@@ -141,13 +173,13 @@ let timed_run matcher ?rewrite_template ?substitute_in_place ?rule ~configuratio
   let matches = Matcher.all ~configuration ~template ~source in
   let rule = Option.value rule ~default:[Ast.True] in
   let matches = apply_rule ?substitute_in_place matcher rule matches in
-  if skip_line_col_compute then
+  if slow_line_col_compute then
+    List.map matches ~f:(update_match source)
+  else
     let a = line_map' source in
     if debug then Format.printf "Line map:@.";
     if debug then Array.iteri a ~f:(fun i e -> Format.printf "%d: %d@." i e);
     List.map matches ~f:(update_match' a)
-  else
-    failwith "restore"
 
 let debug =
   Sys.getenv "DEBUG_COMBY"
