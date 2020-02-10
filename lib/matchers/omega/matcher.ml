@@ -75,11 +75,13 @@ let record_match_context pos_before pos_after =
   in
   (* substitute now *)
   if debug then Format.printf "Curr env: %s@." @@ Match.Environment.to_string !current_environment_ref;
-  let result, _ = substitute !rewrite_template !current_environment_ref in
+  if rewrite then begin
+    let result, _ = substitute !rewrite_template !current_environment_ref in
+    Buffer.add_string actual result;
+  end;
   (* Don't just append, but replace the match context including constant
      strings. I.e., somewhere where we are appending the parth that matched, it
      shouldn't, and instead just ignore. *)
-  if rewrite then Buffer.add_string actual result;
   matches_ref := match_context :: !matches_ref
 
 module Make (Syntax : Syntax.S) (Info : Info.S) = struct
@@ -637,8 +639,10 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     Buffered.feed state `Eof
     |> function
     | Buffered.Done ({ len; buf; _ }, p) ->
-      let c = Bigarray.Array1.unsafe_get buf (len - 1) in
-      if len <> 0 then failwith @@ Format.sprintf "Input left over in template where not expected: %d: %c" len c;
+      if debug then  begin
+        let c = Bigarray.Array1.unsafe_get buf (len - 1) in
+        if len <> 0 then failwith @@ Format.sprintf "Input left over in template where not expected: %d: %c" len c
+      end;
       Ok p
     | _ -> Or_error.error_string "Template could not be parsed."
 
