@@ -32,11 +32,12 @@ let substitute_fresh env template =
   let template_ref = ref template in
   let current_label_ref = ref (parse_first_label !template_ref) in
   while Option.is_some !current_label_ref do
-    let label = match Option.value_exn !current_label_ref with
+    let label =
+      match Option.value_exn !current_label_ref with
       | String label -> label
       | Hole identifier ->
         match Environment.lookup env identifier with
-        | Some v -> v (* TODO: hash this value *)
+        | Some label -> label (* TODO: hash this value *)
         | None -> ""
     in
     let id =
@@ -48,7 +49,14 @@ let substitute_fresh env template =
         String.Table.add_exn label_table ~key:label ~data:id;
         id
     in
-    let pattern = ":[id(" ^ label ^ ")]" in
+    let pattern =
+      match Option.value_exn !current_label_ref with
+      | String label -> ":[id(" ^ label ^ ")]"
+      | Hole identifier ->
+        match Environment.lookup env identifier with
+        | Some label -> ":[id(" ^ label ^ ")]" (* TODO: hash this value *)
+        | None -> ""
+    in
     template_ref := String.substr_replace_first !template_ref ~pattern ~with_:id;
     current_label_ref := parse_first_label !template_ref;
   done;
