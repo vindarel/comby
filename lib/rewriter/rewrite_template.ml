@@ -7,13 +7,18 @@ let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
 
+type label =
+  | String of string
+  | Hole of string
+
 (** Parse the first :[id(label)] label encountered in the template. *)
 let parse_first_label template =
   let label = take_while (function | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '_' -> true | _ -> false) in
   let parser =
     many @@
     choice
-      [ (string ":[id(" *> label <* string ")]" >>= fun label -> return (Some label))
+      [ (string ":[id(" *> label <* string ")]" >>= fun label -> return (Some (String label)))
+      ; (string ":[id(:[" *> label <* string ":])]" >>= fun label -> return (Some (Hole label)))
       ; any_char >>= fun _ -> return None
       ]
   in
@@ -22,12 +27,18 @@ let parse_first_label template =
   | Ok label -> List.find_map label ~f:ident
   | Error _ -> None
 
-let substitute_fresh template =
+let substitute_fresh env template =
   let label_table = String.Table.create () in
   let template_ref = ref template in
   let current_label_ref = ref (parse_first_label !template_ref) in
   while Option.is_some !current_label_ref do
-    let label = Option.value_exn !current_label_ref in
+    let label = match Option.value_exn !current_label_ref with
+      | String label -> label
+      | Hole identifier ->
+        match Environment.lookup env identifier with
+        | Some v -> v (* TODO: hash this value *)
+        | None -> ""
+    in
     let id =
       match String.Table.find label_table label with
       | Some id -> id
@@ -59,7 +70,7 @@ let substitute template env =
     ; ":[?", "]"
     ]
   in
-  let template = substitute_fresh template in
+  let template = substitute_fresh env template in
   Environment.vars env
   |> List.fold ~init:(template, []) ~f:(fun (acc, vars) variable ->
       match Environment.lookup env variable with
