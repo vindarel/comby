@@ -1,12 +1,10 @@
 open Core
-
 open Matchers
 open Rewriter
 
 let configuration = Configuration.create ~match_kind:Fuzzy ()
 
-let all ?(configuration = configuration) template source =
-  C.all ~configuration ~template ~source
+let all ?(configuration = configuration) template source = C.all ~configuration ~template ~source
 
 let print_matches matches =
   List.map matches ~f:Match.to_yojson
@@ -14,24 +12,22 @@ let print_matches matches =
   |> Yojson.Safe.pretty_to_string
   |> print_string
 
+
 let%expect_test "rewrite_comments_1" =
   let template = "replace this :[1] end" in
   let source = "/* don't replace this () end */ do replace this () end" in
   let rewrite_template = "X" in
 
   all template source
-  |> (fun matches ->
-      Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
+  |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
   [%expect_exact "/* don't replace this () end */ do X"]
 
 let%expect_test "rewrite_comments_2" =
-  let template =
-    {|
+  let template = {|
       if (:[1]) { :[2] }
-    |}
-  in
+    |} in
 
   let source =
     {|
@@ -44,11 +40,9 @@ let%expect_test "rewrite_comments_2" =
     |}
   in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       if (:[1]) {}
-    |}
-  in
+    |} in
 
   all template source
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
@@ -65,7 +59,8 @@ let%expect_test "capture_comments" =
   let source = {|if (true) { /* some comment */ console.log(z); }|} in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 0, "line": 1, "column": 1 },
@@ -94,36 +89,27 @@ let%expect_test "capture_comments" =
 ]|}]
 
 let%expect_test "single_quote_in_comment" =
-  let template =
-    {| {:[1]} |}
-  in
+  let template = {| {:[1]} |} in
 
-  let source =
-    {|
+  let source = {|
        /*'*/
        {test}
-    |}
-  in
+    |} in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       {:[1]}
-    |}
-  in
+    |} in
 
   all template source
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
-  [%expect_exact
-    {|
+  [%expect_exact {|
       {test}
     |}]
 
 let%expect_test "single_quote_in_comment" =
-  let template =
-    {| {:[1]} |}
-  in
+  let template = {| {:[1]} |} in
 
   let source =
     {|
@@ -136,11 +122,9 @@ let%expect_test "single_quote_in_comment" =
     |}
   in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       {:[1]}
-    |}
-  in
+    |} in
 
   all template source
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
@@ -157,9 +141,7 @@ let%expect_test "single_quote_in_comment" =
     |}]
 
 let%expect_test "single_quote_in_comment" =
-  let template =
-    {| {:[1]} |}
-  in
+  let template = {| {:[1]} |} in
 
   let source =
     {|
@@ -171,11 +153,9 @@ let%expect_test "single_quote_in_comment" =
     |}
   in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       {:[1]}
-    |}
-  in
+    |} in
 
   all template source
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
@@ -191,30 +171,23 @@ let%expect_test "single_quote_in_comment" =
     |}]
 
 let%expect_test "give_back_the_comment_characters_for_newline_comments_too" =
-  let template =
-    {| {:[1]} |}
-  in
+  let template = {| {:[1]} |} in
 
-  let source =
-    {|
+  let source = {|
        {
          // a comment
        }
-    |}
-  in
+    |} in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       {:[1]}
-    |}
-  in
+    |} in
 
   all template source
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
-  [%expect_exact
-    {|
+  [%expect_exact {|
       {
          // a comment
        }

@@ -1,19 +1,24 @@
 open Core
-
 open Matchers
 open Rewriter
 
 let configuration = Configuration.create ~match_kind:Fuzzy ()
 
-
-let run ?(configuration = configuration) (module M : Matchers.Matcher) source match_template rewrite_template =
+let run
+    ?(configuration = configuration)
+    (module M : Matchers.Matcher)
+    source
+    match_template
+    rewrite_template
+  =
   M.all ~configuration ~template:match_template ~source
   |> function
   | [] -> print_string "No matches."
   | results ->
-    Option.value_exn (Rewrite.all ~source ~rewrite_template results)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
+      Option.value_exn (Rewrite.all ~source ~rewrite_template results)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
+
 
 let%expect_test "parse_rust_apostrophe_ok" =
   let source = {|width="1280"|} in
@@ -55,10 +60,9 @@ let%expect_test "strict_nested_matching" =
   run (module Matchers.Dyck) source match_template rewrite_template;
   [%expect_exact {|No matches.|}]
 
-
-
 let%expect_test "ocaml_blocks" =
-  let source = {|
+  let source =
+    {|
     module M : sig
         type t
     end = struct
@@ -81,7 +85,8 @@ let%expect_test "ocaml_blocks" =
 |}]
 
 let%expect_test "ocaml_complex_blocks_with_same_end" =
-  let source = {|
+  let source =
+    {|
     begin
     match x with
     | _ ->
@@ -99,7 +104,8 @@ let%expect_test "ocaml_complex_blocks_with_same_end" =
   let rewrite_template = {|<1>:[1]</1>|} in
 
   run (module Matchers.OCaml) source match_template rewrite_template;
-  [%expect_exact {|
+  [%expect_exact
+    {|
     <1>match x with
     | _ ->
         let module M = struct type t end
@@ -112,7 +118,8 @@ let%expect_test "ocaml_complex_blocks_with_same_end" =
 |}]
 
 let%expect_test "ruby_blocks" =
-  let source = {|
+  let source =
+    {|
 class ActionController::Base
   before_filter :generate_css_from_less
 
@@ -126,7 +133,8 @@ end
   let rewrite_template = {|<1>:[1]</1>|} in
 
   run (module Matchers.Ruby) source match_template rewrite_template;
-  [%expect_exact {|
+  [%expect_exact
+    {|
 <1>ActionController::Base
   before_filter :generate_css_from_less
 
@@ -367,7 +375,6 @@ let%expect_test "ruby_blocks_5" =
 
   run (module Matchers.Ruby) source match_template rewrite_template;
   [%expect_exact {|<1>def ( body )end</1>|}]
-
 
 let%expect_test "ruby_blocks_5" =
   let source = {|class def( body ) end end|} in

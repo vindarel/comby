@@ -1,5 +1,4 @@
 open Core
-
 open Language
 open Matchers
 open Match
@@ -16,23 +15,25 @@ let format s =
   |> String.concat ~sep:"\n"
   |> String.chop_suffix_exn ~suffix:"\n"
 
+
 let run_rule source match_template rewrite_template rule =
   Generic.first ~configuration match_template source
   |> function
   | Error _ -> print_string "bad"
-  | Ok result ->
-    match result with
-    | ({ environment; _ } as m) ->
-      let e = Rule.(result_env @@ apply rule environment) in
-      match e with
-      | None -> print_string "bad bad"
-      | Some e ->
-        { m with environment = e }
-        |> List.return
-        |> Rewrite.all ~source ~rewrite_template
-        |> (fun x -> Option.value_exn x)
-        |> (fun { rewritten_source; _ } -> rewritten_source)
-        |> print_string
+  | Ok result -> (
+      match result with
+      | { environment; _ } as m -> (
+          let e = Rule.(result_env @@ apply rule environment) in
+          match e with
+          | None -> print_string "bad bad"
+          | Some e ->
+              { m with environment = e }
+              |> List.return
+              |> Rewrite.all ~source ~rewrite_template
+              |> (fun x -> Option.value_exn x)
+              |> (fun { rewritten_source; _ } -> rewritten_source)
+              |> print_string ) )
+
 
 let%expect_test "rewrite_rule" =
   let source = {|int|} in
@@ -42,9 +43,7 @@ let%expect_test "rewrite_rule" =
   let rule =
     {|
       where rewrite :[1] { "int" -> "expect" }
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
+    |} |> Rule.create |> Or_error.ok_exn
   in
 
   run_rule source match_template rewrite_template rule;
@@ -113,9 +112,7 @@ let%expect_test "haskell_example" =
   let rule =
     {|
       where rewrite :[contents] { "," -> "++" }
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
+    |} |> Rule.create |> Or_error.ok_exn
   in
 
   run_rule source match_template rewrite_template rule;

@@ -1,7 +1,5 @@
 open Core
-
 open Lwt.Infix
-
 open Match
 open Server_types
 
@@ -12,21 +10,20 @@ let port = "9991"
 let pid' = ref None
 
 let launch port =
-  Unix.create_process ~prog:binary_path ~args:["-p"; port]
-  |> fun { pid; _ } -> pid' := Some pid
+  Unix.create_process ~prog:binary_path ~args:["-p"; port] |> fun { pid; _ } -> pid' := Some pid
+
 
 let post endpoint json =
   let uri =
-    let uri endpoint =
-      Uri.of_string ("http://127.0.0.1:" ^ port ^ "/" ^ endpoint)
-    in
+    let uri endpoint = Uri.of_string ("http://127.0.0.1:" ^ port ^ "/" ^ endpoint) in
     match endpoint with
     | `Match -> uri "match"
     | `Rewrite -> uri "rewrite"
     | `Substitute -> uri "substitute"
   in
   let thread =
-    Cohttp_lwt_unix.Client.post ~body:(`String json) uri >>= fun (_, response) ->
+    Cohttp_lwt_unix.Client.post ~body:(`String json) uri
+    >>= fun (_, response) ->
     match response with
     | `Stream response -> Lwt_stream.get response >>= fun result -> Lwt.return result
     | _ -> Lwt.return None
@@ -35,23 +32,25 @@ let post endpoint json =
   | None -> "FAIL"
   | Some result -> result
 
+
 (* FIXME(RVT) use wait *)
 let launch () =
   launch port;
   Unix.sleep 2
 
+
 let kill () =
   match !pid' with
   | None -> ()
-  | Some pid ->
-    match Signal.send Signal.kill (`Pid pid) with
-    | `Ok -> ()
-    | `No_such_process -> ()
+  | Some pid -> (
+      match Signal.send Signal.kill (`Pid pid) with
+      | `Ok -> ()
+      | `No_such_process -> () )
+
 
 let () = launch ()
 
 let%expect_test "post_request" =
-
   let source = "hello world" in
   let match_template = "hello :[1]" in
   let rule = Some {|where :[1] == "world"|} in
@@ -63,7 +62,8 @@ let%expect_test "post_request" =
   |> post `Match
   |> print_string;
 
-  [%expect {|
+  [%expect
+    {|
     {
       "matches": [
         {
@@ -88,30 +88,16 @@ let%expect_test "post_request" =
       "id": 0
     } |}];
 
-  (* Disabled: Angstrom does not output similarly useful parse errors.
-     let source = "hello world" in
-     let match_template = "hello :[1]" in
-     let rule = Some {|where :[1] = "world"|} in
-     let language = "generic" in
+  (* Disabled: Angstrom does not output similarly useful parse errors. let source = "hello world" in
+     let match_template = "hello :[1]" in let rule = Some {|where :[1] = "world"|} in let language =
+     "generic" in
 
-     In.{ source; match_template; rule; language; id = 0 }
-     |> In.match_request_to_yojson
-     |> Yojson.Safe.to_string
-     |> post `Match
-     |> print_string;
+     In.{ source; match_template; rule; language; id = 0 } |> In.match_request_to_yojson |>
+     Yojson.Safe.to_string |> post `Match |> print_string;
 
-     [%expect {|
-      Error in line 1, column 7:
-      where :[1] = "world"
-            ^
-      Expecting "false", "match", "rewrite" or "true"
-      Backtracking occurred after:
-        Error in line 1, column 12:
-        where :[1] = "world"
-                   ^
-        Expecting "!=" or "==" |}];
-  *)
-
+     [%expect {| Error in line 1, column 7: where :[1] = "world" ^ Expecting "false", "match",
+     "rewrite" or "true" Backtracking occurred after: Error in line 1, column 12: where :[1] =
+     "world" ^ Expecting "!=" or "==" |}]; *)
   let substitution_kind = "in_place" in
   let source = "hello world" in
   let match_template = "hello :[1]" in
@@ -119,13 +105,14 @@ let%expect_test "post_request" =
   let rewrite_template = ":[1], hello" in
   let language = "generic" in
 
-  In.{ source; match_template; rewrite_template; rule; language; substitution_kind; id = 0}
+  In.{ source; match_template; rewrite_template; rule; language; substitution_kind; id = 0 }
   |> In.rewrite_request_to_yojson
   |> Yojson.Safe.to_string
   |> post `Rewrite
   |> print_string;
 
-  [%expect {|
+  [%expect
+    {|
       {
         "rewritten_source": "world, hello",
         "in_place_substitutions": [
@@ -157,40 +144,31 @@ let%expect_test "post_request" =
   let rewrite_template = ":[1], hello" in
   let language = "generic" in
 
-  In.{ source; match_template; rewrite_template; rule; language; substitution_kind; id = 0}
+  In.{ source; match_template; rewrite_template; rule; language; substitution_kind; id = 0 }
   |> In.rewrite_request_to_yojson
   |> Yojson.Safe.to_string
   |> post `Rewrite
   |> print_string;
 
-  [%expect {|
+  [%expect
+    {|
       {
         "rewritten_source": "world, hello\nworld, hello",
         "in_place_substitutions": [],
         "id": 0
       } |}]
 
-(* Disabled: Angstrom does not output similarly useful parse errors.
-   (* test there must be at least one predicate in a rule *)
-   let source = "hello world" in
-   let match_template = "hello :[1]" in
-   let rule = Some {|where |} in
-   let language = "generic" in
+(* Disabled: Angstrom does not output similarly useful parse errors. (* test there must be at least
+   one predicate in a rule *) let source = "hello world" in let match_template = "hello :[1]" in let
+   rule = Some {|where |} in let language = "generic" in
 
-   let request = In.{ source; match_template; rule; language; id = 0 } in
-   let json = In.match_request_to_yojson request |> Yojson.Safe.to_string in
-   let result = post `Match json in
+   let request = In.{ source; match_template; rule; language; id = 0 } in let json =
+   In.match_request_to_yojson request |> Yojson.Safe.to_string in let result = post `Match json in
 
-   print_string result;
-   [%expect {|
-    Error in line 1, column 7:
-    where
-          ^
-    Expecting ":[", "false", "match", "rewrite", "true" or string literal |}]
-*)
+   print_string result; [%expect {| Error in line 1, column 7: where ^ Expecting ":[", "false",
+   "match", "rewrite", "true" or string literal |}] *)
 
 let%expect_test "post_substitute" =
-
   let rewrite_template = ":[1] hi :[2]" in
   let environment = Environment.create () in
   let environment = Environment.add environment "1" "oh" in

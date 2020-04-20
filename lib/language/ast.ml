@@ -5,8 +5,7 @@ type atom =
   | String of string
 [@@deriving sexp]
 
-type antecedent = atom
-[@@deriving sexp]
+type antecedent = atom [@@deriving sexp]
 
 type expression =
   | True
@@ -16,12 +15,11 @@ type expression =
   | Match of atom * (antecedent * consequent) list
   | RewriteTemplate of string
   | Rewrite of atom * (antecedent * expression)
-and consequent = expression list
-[@@deriving sexp]
 
-let (=) left right = Equal (left, right)
+and consequent = expression list [@@deriving sexp]
 
-let (<>) left right = Not_equal (left, right)
+let ( = ) left right = Equal (left, right)
 
-type t = expression list
-[@@deriving sexp]
+let ( <> ) left right = Not_equal (left, right)
+
+type t = expression list [@@deriving sexp]

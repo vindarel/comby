@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 open Rewriter
 
@@ -10,9 +9,10 @@ let run ?(configuration = configuration) source match_template rewrite_template 
   |> function
   | [] -> print_string "No matches."
   | results ->
-    Option.value_exn (Rewrite.all ~source ~rewrite_template results)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
+      Option.value_exn (Rewrite.all ~source ~rewrite_template results)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
+
 
 let%expect_test "optional_holes_basic_match" =
   let source = {||} in
@@ -156,20 +156,24 @@ try {
   hey
 }
 |} in
-  let match_template = {|
+  let match_template =
+    {|
 catch (:[type] :[var]) {
 :[?anything]
 logger.:[logMethod](:[var])
 :[?something]
 }
-|} in
-  let rewrite_template = {|
+|}
+  in
+  let rewrite_template =
+    {|
 catch (:[type] :[var]) {
 :[anything]
 logger.:[logMethod]("", :[var])
 :[something]
 }
-|} in
+|}
+  in
   run source match_template rewrite_template;
   [%expect_exact {|
 try {
@@ -201,8 +205,8 @@ let%expect_test "optional_holes_match_over_coalesced_whitespace_in_strings" =
   run source match_template rewrite_template;
   [%expect_exact {|//|}];
 
-  (* Uh, turns out whitespace is significant inside strings, so this is correct
-     until it is decided otherwise *)
+  (* Uh, turns out whitespace is significant inside strings, so this is correct until it is decided
+     otherwise *)
   let source = {|"a     c"|} in
   let match_template = {|"a :[?b] c"|} in
   let rewrite_template = {|/:[?b]/|} in

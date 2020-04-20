@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 open Rewriter
 
@@ -14,26 +13,28 @@ let format s =
   |> String.concat ~sep:"\n"
   |> String.chop_suffix_exn ~suffix:"\n"
 
+
 let run ?(configuration = configuration) source match_template rewrite_template =
   Generic.first ~configuration match_template source
   |> function
   | Ok result ->
-    Rewrite.all ~source ~rewrite_template [result]
-    |> (fun x -> Option.value_exn x)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
+      Rewrite.all ~source ~rewrite_template [result]
+      |> (fun x -> Option.value_exn x)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
   | Error _ ->
-    (* this is too annoying to fix everytime the grammar changes. *)
-    print_string ""
+      (* this is too annoying to fix everytime the grammar changes. *)
+      print_string ""
+
 
 let run_all ?(configuration = configuration) source match_template rewrite_template =
   Generic.all ~configuration ~template:match_template ~source
   |> function
   | [] -> print_string "No matches."
   | results ->
-    Option.value_exn (Rewrite.all ~source ~rewrite_template results)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
+      Option.value_exn (Rewrite.all ~source ~rewrite_template results)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
 
 
 let%expect_test "basic" =
@@ -114,8 +115,7 @@ let%expect_test "basic_failures" =
   let match_template = {|a :[2] d :[1]|} in
   let rewrite_template = {|:[1]|} in
   run source match_template rewrite_template;
-  [%expect_exact
-    {||}];
+  [%expect_exact {||}];
 
   let source = {|a b c d|} in
   let match_template = {|a :[2] b :[1]|} in
@@ -346,13 +346,17 @@ let%expect_test "delimiter_matching" =
   run source match_template rewrite_template;
   [%expect_exact {|hello my name is bob the builder|}];
 
-  let source = {|www.testdofooname.com/picsinsideit/stunningpictureofkays1381737242g8k4n-280x428.jpg|} in
+  let source =
+    {|www.testdofooname.com/picsinsideit/stunningpictureofkays1381737242g8k4n-280x428.jpg|}
+  in
   let match_template = {|www.:[1]-:[2].jpg|} in
   let rewrite_template = {|:[1] :[2]|} in
   run source match_template rewrite_template;
   [%expect_exact {|testdofooname.com/picsinsideit/stunningpictureofkays1381737242g8k4n 280x428|}];
 
-  let source = {|https://api.github.com/repos/dmjacobsen/slurm/commits/716c1499695c68afcab848a1b49653574b4fc167|} in
+  let source =
+    {|https://api.github.com/repos/dmjacobsen/slurm/commits/716c1499695c68afcab848a1b49653574b4fc167|}
+  in
   let match_template = {|:[1]api.:[2]/repos/:[3]s/:[4]|} in
   let rewrite_template = {|:[1] :[2] :[3] :[4]|} in
   run source match_template rewrite_template;
@@ -366,12 +370,14 @@ let%expect_test "delimiter_matching" =
              mad_bit_nextbyte(&stream->ptr),
              frame_used = md_len - si.foo_data_begin);
       stream->md_len += frame_used;
-    |} |> format
+    |}
+    |> format
   in
   let match_template = {|memcpy(:[1], :[2], :[3]);|} in
   let rewrite_template = {|:[1], :[2], :[3]|} in
   run source match_template rewrite_template;
-  [%expect_exact {|assert(stream->md_len + md_len -
+  [%expect_exact
+    {|assert(stream->md_len + md_len -
        si.foo_data_begin <= MAD_BUFFER_MDLEN);
 *stream->foo_data + stream->md_len, mad_bit_nextbyte(&stream->ptr), frame_used = md_len - si.foo_data_begin
 stream->md_len += frame_used;|}]
@@ -386,9 +392,8 @@ let%expect_test "significant_whitespace" =
   run source match_template rewrite_template;
   [%expect_exact {|two spaces|}];
 
-  (* FIXME: this should fail. also test case where separators do or do not need
-     whitespace.  e.g., strict about strcpy(src,dst) matching a template
-     strcpy(:[1],:[2]) versus strcpy(:[1], :[2]) *)
+  (* FIXME: this should fail. also test case where separators do or do not need whitespace. e.g.,
+     strict about strcpy(src,dst) matching a template strcpy(:[1],:[2]) versus strcpy(:[1], :[2]) *)
   let source = {|two  spaces|} in
   let match_template = {|:[1] :[2]|} in
   let rewrite_template = {|:[1] :[2]|} in
@@ -422,11 +427,9 @@ let%expect_test "contextual_matching_with_short_hole_syntax" =
 let%expect_test "trivial_empty_case" =
   let source = "" in
   let match_template = "" in
-  begin
-    Generic.all ~configuration ~template:match_template ~source
-    |> function
-    | [] -> print_string "No matches."
-    | hd :: _ ->
-      print_string (Yojson.Safe.to_string (Match.to_yojson hd))
-  end;
-  [%expect_exact {|{"range":{"start":{"offset":0,"line":1,"column":1},"end":{"offset":0,"line":1,"column":1}},"environment":[],"matched":""}|}]
+  ( Generic.all ~configuration ~template:match_template ~source
+  |> function
+  | [] -> print_string "No matches."
+  | hd :: _ -> print_string (Yojson.Safe.to_string (Match.to_yojson hd)) );
+  [%expect_exact
+    {|{"range":{"start":{"offset":0,"line":1,"column":1},"end":{"offset":0,"line":1,"column":1}},"environment":[],"matched":""}|}]

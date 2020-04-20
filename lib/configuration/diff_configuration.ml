@@ -1,7 +1,7 @@
 open Core
 
-(* This is the default patdiff configuration, except whitespace is toggled to
-   true. See patdiff/lib/configuration record for options.*)
+(* This is the default patdiff configuration, except whitespace is toggled to true. See
+   patdiff/lib/configuration record for options.*)
 let default context =
   Format.sprintf
     {|;; -*- scheme -*-
@@ -39,11 +39,14 @@ let default context =
   ((prefix ((text "@|") (style ((bg bright_black) (fg black)))))
    (suffix ((text " ============================================================") (style ())))
    (style (bold))))
-)|} context
+)|}
+    context
+
 
 let terminal ?(context = 16) () =
   Patdiff_lib.Configuration.Config.t_of_sexp (Sexp.of_string (default context))
   |> Patdiff_lib.Configuration.parse
+
 
 let diff_configuration =
   {|;; -*- scheme -*-
@@ -81,13 +84,15 @@ let diff_configuration =
    (style (bold))))
 )|}
 
+
 let match_diff () =
   Patdiff_lib.Configuration.Config.t_of_sexp (Sexp.of_string diff_configuration)
   |> Patdiff_lib.Configuration.parse
 
-(* Needs (unrefined true), otherwise it just prints without colors. Unrefined true
-   will diff on a line basis. line_unified is ignored for unrefined, but
-   will still create a prefix width of 2 in the diff if it is "!|" *)
+
+(* Needs (unrefined true), otherwise it just prints without colors. Unrefined true will diff on a
+   line basis. line_unified is ignored for unrefined, but will still create a prefix width of 2 in
+   the diff if it is "!|" *)
 let plain_configuration =
   {|;; -*- scheme -*-
 ;; patdiff Configuration file
@@ -124,9 +129,11 @@ let plain_configuration =
 )
 |}
 
+
 let plain () =
   Patdiff_lib.Configuration.Config.t_of_sexp (Sexp.of_string plain_configuration)
   |> Patdiff_lib.Configuration.parse
+
 
 type kind =
   | Plain
@@ -147,7 +154,8 @@ let get_diff kind source_path source_content result =
     | Plain -> plain ()
     | Colored
     | Html
-    | Default -> terminal ~context:3 ()
+    | Default ->
+        terminal ~context:3 ()
     | Match_only -> match_diff ()
   in
   let prev = Patdiff_core.{ name = source_path; text = source_content } in

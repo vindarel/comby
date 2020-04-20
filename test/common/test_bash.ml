@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 open Rewriter
 
@@ -9,23 +8,23 @@ let run_bash source match_template rewrite_template =
   Bash.first ~configuration match_template source
   |> function
   | Ok result ->
-    Rewrite.all ~source ~rewrite_template [result]
-    |> (fun x -> Option.value_exn x)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
-  | Error _ ->
-    print_string rewrite_template
+      Rewrite.all ~source ~rewrite_template [result]
+      |> (fun x -> Option.value_exn x)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
+  | Error _ -> print_string rewrite_template
+
 
 let run_go source match_template rewrite_template =
   Go.first ~configuration match_template source
   |> function
   | Ok result ->
-    Rewrite.all ~source ~rewrite_template [result]
-    |> (fun x -> Option.value_exn x)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
-  | Error _ ->
-    print_string rewrite_template
+      Rewrite.all ~source ~rewrite_template [result]
+      |> (fun x -> Option.value_exn x)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
+  | Error _ -> print_string rewrite_template
+
 
 let%expect_test "custom_long_delimiters" =
   let source =
@@ -67,7 +66,8 @@ let%expect_test "custom_long_delimiters_doesn't_work_in_go" =
   let rewrite_template = {|case nuked blocks esac|} in
 
   run_go source match_template rewrite_template;
-  [%expect_exact {|
+  [%expect_exact
+    {|
       case nuked blocks esac
 
         case

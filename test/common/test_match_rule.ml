@@ -1,5 +1,4 @@
 open Core
-
 open Language
 open Matchers
 open Match
@@ -9,11 +8,13 @@ let rule_parses rule =
   | Ok _ -> "true"
   | Error _ -> "false"
 
+
 let print_matches matches =
   List.map matches ~f:Match.to_yojson
   |> (fun matches -> `List matches)
   |> Yojson.Safe.pretty_to_string
   |> print_string
+
 
 let%expect_test "parse_rule" =
   let rule = {| where :[1] == :[2], :[3] == "y" |} in
@@ -24,23 +25,24 @@ let%expect_test "parse_rule" =
   rule_parses rule |> print_string;
   [%expect_exact {|true|}];
 
-  let rule =  {| where :[1] != :[3] |} in
+  let rule = {| where :[1] != :[3] |} in
   rule_parses rule |> print_string;
   [%expect_exact {|true|}]
 
 let%expect_test "parse_basic" =
   Rule.create {|where "a" == "a"|}
   |> Or_error.ok_exn
-  |> fun rule -> print_s [%message (rule : Ast.expression list)];
+  |> fun rule ->
+  print_s [%message (rule : Ast.expression list)];
   [%expect_exact {|(rule ((Equal (String a) (String a))))
 |}]
 
 let%expect_test "parse_match_one_case" =
   Rule.create {|where match "match_me" { | "case_one" -> true }|}
   |> Or_error.ok_exn
-  |> fun rule -> print_s [%message (rule : Ast.expression list)];
-  [%expect_exact "(rule ((Match (String match_me) (((String case_one) (True))))))
-"]
+  |> fun rule ->
+  print_s [%message (rule : Ast.expression list)];
+  [%expect_exact "(rule ((Match (String match_me) (((String case_one) (True))))))\n"]
 
 let%expect_test "parse_match_multi_case" =
   Rule.create
@@ -51,20 +53,22 @@ let%expect_test "parse_match_multi_case" =
        }
     |}
   |> Or_error.ok_exn
-  |> fun rule -> print_s [%message (rule : Ast.expression list)];
-  [%expect_exact "(rule
- ((Match (String match_me)
-   (((String case_one) (True)) ((String case_two) (False))))))
-"]
+  |> fun rule ->
+  print_s [%message (rule : Ast.expression list)];
+  [%expect_exact
+    "(rule\n\
+    \ ((Match (String match_me)\n\
+    \   (((String case_one) (True)) ((String case_two) (False))))))\n"]
 
 let sat ?(env = Environment.create ()) rule =
   let rule = Rule.create rule |> Or_error.ok_exn in
-  Format.sprintf "%b" (Rule.(sat @@ apply rule env))
+  Format.sprintf "%b" Rule.(sat @@ apply rule env)
+
 
 let make_env bindings =
-  List.fold bindings
-    ~init:(Environment.create ())
-    ~f:(fun env (var, value) -> Environment.add env var value)
+  List.fold bindings ~init:(Environment.create ()) ~f:(fun env (var, value) ->
+      Environment.add env var value)
+
 
 let%expect_test "rule_sat" =
   let rule = {| where "x" != "y" |} in
@@ -114,8 +118,7 @@ let configuration = Configuration.create ~match_kind:Fuzzy ()
 
 let format s =
   let s = s |> String.chop_prefix_exn ~prefix:"\n" in
-  let leading_indentation =
-    Option.value_exn (String.lfindi s ~f:(fun _ c -> c <> ' ')) in
+  let leading_indentation = Option.value_exn (String.lfindi s ~f:(fun _ c -> c <> ' ')) in
   s
   |> String.split ~on:'\n'
   |> List.map ~f:(Fn.flip String.drop_prefix leading_indentation)
@@ -124,31 +127,22 @@ let format s =
 
 
 let%expect_test "where_true" =
-  let template =
-    {|
+  let template = {|
       (:[1]) => {}
-    |}
-    |> format
-  in
+    |} |> format in
 
-  let source =
-    {|
+  let source = {|
       (b,c) => {}
-    |}
-    |> format
-  in
+    |} |> format in
 
-  let rule =
-    {| where true
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
-  in
+  let rule = {| where true
+    |} |> Rule.create |> Or_error.ok_exn in
 
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -170,19 +164,13 @@ let%expect_test "where_true" =
     ] |}]
 
 let%expect_test "match_sat" =
-  let template =
-    {|
+  let template = {|
       (:[1]) => {}
-    |}
-    |> format
-  in
+    |} |> format in
 
-  let source =
-    {|
+  let source = {|
       (b,c) => {}
-    |}
-    |> format
-  in
+    |} |> format in
 
   let rule =
     {| where
@@ -213,7 +201,8 @@ let%expect_test "match_sat" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -234,13 +223,10 @@ let%expect_test "match_sat" =
       }
     ] |}];
 
-  let source =
-    {|
+  let source = {|
       (a) => {}
       (b,c) => {}
-    |}
-    |> format
-  in
+    |} |> format in
 
   let rule =
     {| where
@@ -256,7 +242,8 @@ let%expect_test "match_sat" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -292,7 +279,8 @@ let%expect_test "match_sat" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -330,23 +318,19 @@ let%expect_test "match_sat" =
   [%expect {|
     [] |}]
 
-
 let%expect_test "match_s_suffix" =
   let template = ":[1]s" in
 
   let source = "names" in
 
-  let rule =
-    {| where true
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
-  in
+  let rule = {| where true
+    |} |> Rule.create |> Or_error.ok_exn in
 
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -372,17 +356,14 @@ let%expect_test "match_s_suffix" =
 
   let source = "names" in
 
-  let rule =
-    {| where true
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
-  in
+  let rule = {| where true
+    |} |> Rule.create |> Or_error.ok_exn in
 
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -412,9 +393,7 @@ let%expect_test "configuration_choice_based_on_case" =
     {| where match :[1] {
        | "ame" -> true
        }
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
+    |} |> Rule.create |> Or_error.ok_exn
   in
 
   Generic.all ~configuration ~template ~source
@@ -431,15 +410,14 @@ let%expect_test "configuration_choice_based_on_case" =
     {| where match :[1] {
        | "names" -> true
        }
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
+    |} |> Rule.create |> Or_error.ok_exn
   in
 
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -468,9 +446,7 @@ let%expect_test "configuration_choice_based_on_case" =
     {| where match :[1] {
        | "names" -> true
        }
-    |}
-    |> Rule.create
-    |> Or_error.ok_exn
+    |} |> Rule.create |> Or_error.ok_exn
   in
 
   Generic.all ~configuration ~template ~source
@@ -478,9 +454,6 @@ let%expect_test "configuration_choice_based_on_case" =
   |> print_matches;
   [%expect {|
     [] |}]
-
-
-
 
 let%expect_test "match_using_environment_merge" =
   let template = "{:[1]}" in
@@ -497,7 +470,8 @@ let%expect_test "match_using_environment_merge" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -535,7 +509,6 @@ let%expect_test "match_using_environment_merge" =
   [%expect {|
     [] |}]
 
-
 let%expect_test "nested_matches" =
   let template = ":[1]" in
 
@@ -557,7 +530,8 @@ let%expect_test "nested_matches" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -601,7 +575,6 @@ let%expect_test "nested_matches" =
   [%expect {|
     [] |}]
 
-
 let%expect_test "match_on_template" =
   let template = ":[1]" in
 
@@ -619,7 +592,8 @@ let%expect_test "match_on_template" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -656,7 +630,8 @@ let%expect_test "match_on_template" =
   Generic.all ~configuration ~template ~source
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
-  [%expect {|
+  [%expect
+    {|
     [
       {
         "range": {
@@ -694,4 +669,4 @@ let%expect_test "match_on_template" =
   |> List.filter ~f:(fun { environment; _ } -> Rule.(sat @@ apply rule environment))
   |> print_matches;
   [%expect {|
-    [] |}];
+    [] |}]

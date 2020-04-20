@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 
 let configuration = Configuration.create ~match_kind:Fuzzy ()
@@ -46,12 +45,8 @@ let%expect_test "invalid_raw_string_in_python_but_matches_because_ignores_after"
   print_matches matches;
   [%expect_exact {|[ "\"\"\"\"\"\"" ]|}]
 
-(* Disabled: this works by luck in Alpha, but it shouldn't. It is empty list in Omega. Should be explicitly supported *)
-(*
-let%expect_test "raw_string_captures_escape_sequences" =
-  let source = {|"""\""""|} in
-  let template = {|""":[1]"""|} in
-  let matches = Python.all ~configuration ~template ~source in
-  print_matches matches;
-  [%expect_exact {|[ "\"\"\"\\\"\"\"" ]|}]
-*)
+(* Disabled: this works by luck in Alpha, but it shouldn't. It is empty list in Omega. Should be
+   explicitly supported *)
+(* let%expect_test "raw_string_captures_escape_sequences" = let source = {|"""\""""|} in let
+   template = {|""":[1]"""|} in let matches = Python.all ~configuration ~template ~source in
+   print_matches matches; [%expect_exact {|[ "\"\"\"\\\"\"\"" ]|}] *)

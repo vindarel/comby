@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 open Rewriter
 
@@ -10,9 +9,10 @@ let run_all ?(configuration = configuration) source match_template rewrite_templ
   |> function
   | [] -> print_string "No matches."
   | results ->
-    Option.value_exn (Rewrite.all ~source ~rewrite_template results)
-    |> (fun { rewritten_source; _ } -> rewritten_source)
-    |> print_string
+      Option.value_exn (Rewrite.all ~source ~rewrite_template results)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
+
 
 let%expect_test "non_space" =
   let run = run_all in
@@ -32,8 +32,7 @@ let%expect_test "only_space" =
 
 let%expect_test "up_to_newline" =
   let run = run_all in
-  let source =
-    {|
+  let source = {|
 foo.
 foo.bar.quux
 derp
@@ -49,8 +48,7 @@ derp
 
 let%expect_test "match_empty_in_newline_hole" =
   let run = run_all in
-  let source =
-    {|stuff
+  let source = {|stuff
 after
 |} in
   let match_template = {|stuff:[x\n]|} in
@@ -62,8 +60,7 @@ after
 
 let%expect_test "leading_indentation" =
   let run = run_all in
-  let source =
-    {|
+  let source = {|
        foo. bar bazz
           foo.bar.quux
   derp
@@ -103,8 +100,7 @@ let%expect_test "alphanum_partial_match" =
 
 let%expect_test "newline_matcher_should_not_be_sat_on_space" =
   let run = run_all in
-  let source =
-    {|a b c d
+  let source = {|a b c d
  e f g h|} in
   let match_template = {|:[line\n] |} in
   let rewrite_template = {|{:[line]}|} in
@@ -113,8 +109,7 @@ let%expect_test "newline_matcher_should_not_be_sat_on_space" =
 }e f g h|}];
 
   let run = run_all in
-  let source =
-    {|a b c d
+  let source = {|a b c d
  e f g h|} in
   let match_template = {|:[line\n]:[next]|} in
   let rewrite_template = {|{:[line]}|} in
@@ -123,8 +118,7 @@ let%expect_test "newline_matcher_should_not_be_sat_on_space" =
 }|}];
 
   let run = run_all in
-  let source =
-    {|a b c d
+  let source = {|a b c d
 e f g h
 |} in
   let match_template = {|:[line1\n]:[next\n]|} in

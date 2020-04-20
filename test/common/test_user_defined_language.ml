@@ -8,17 +8,18 @@ let run (module M : Matchers.Matcher) source match_template rewrite_template =
   M.first ~configuration match_template source
   |> function
   | Ok result ->
-    Rewrite.all ~source ~rewrite_template [result]
-    |> (fun x -> Option.value_exn x)
-    |> (fun {rewritten_source; _} -> rewritten_source)
-    |> print_string
-  | Error _ ->
-    print_string rewrite_template
+      Rewrite.all ~source ~rewrite_template [result]
+      |> (fun x -> Option.value_exn x)
+      |> (fun { rewritten_source; _ } -> rewritten_source)
+      |> print_string
+  | Error _ -> print_string rewrite_template
+
 
 let%expect_test "user_defined_language" =
   let c =
     Syntax.
-      { user_defined_delimiters = [("case", "esac")]
+      {
+        user_defined_delimiters = ["case", "esac"]
       ; escapable_string_literals = None
       ; raw_string_literals = []
       ; comments = [Multiline ("/*", "*/"); Until_newline "//"]
@@ -48,8 +49,9 @@ let%expect_test "user_defined_language" =
   in
   let match_template = {|case :[1] esac|} in
   let rewrite_template = {|case nuked blocks esac|} in
-  run user_lang source match_template rewrite_template ;
-  [%expect_exact {|
+  run user_lang source match_template rewrite_template;
+  [%expect_exact
+    {|
       case nuked blocks esac
       /*
       case
@@ -88,7 +90,7 @@ let%expect_test "user_defined_language_from_json" =
   let source = "" in
   let match_template = {|""|} in
   let rewrite_template = {|""|} in
-  run user_lang source match_template rewrite_template ;
+  run user_lang source match_template rewrite_template;
   [%expect_exact {|""|}]
 
 let%expect_test "user_defined_language_from_json_optional_escapable" =
@@ -114,5 +116,5 @@ let%expect_test "user_defined_language_from_json_optional_escapable" =
   let source = "" in
   let match_template = {|""|} in
   let rewrite_template = {|""|} in
-  run user_lang source match_template rewrite_template ;
+  run user_lang source match_template rewrite_template;
   [%expect_exact {|""|}]

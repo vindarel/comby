@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 open Rewriter
 
@@ -8,11 +7,13 @@ let configuration = Configuration.create ~match_kind:Fuzzy ()
 let all ?(configuration = configuration) template source =
   Generic.all ~configuration ~template ~source
 
+
 let print_matches matches =
   List.map matches ~f:Match.to_yojson
   |> (fun matches -> `List matches)
   |> Yojson.Safe.pretty_to_string
   |> print_string
+
 
 let%expect_test "dont_get_stuck" =
   let template = "" in
@@ -26,7 +27,8 @@ let%expect_test "dont_get_stuck" =
   let source = "a" in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 0, "line": 1, "column": 1 },
@@ -42,7 +44,8 @@ let%expect_test "dont_get_stuck" =
   let source = "aaa" in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 0, "line": 1, "column": 1 },
@@ -96,7 +99,8 @@ let%expect_test "single_token" =
   let source = {|the problem is this|} in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 12, "line": 1, "column": 13 },
@@ -116,13 +120,13 @@ let%expect_test "single_token" =
   }
 ]|}]
 
-
 let%expect_test "single_token_with_preceding_whitespace" =
   let template = {| :[[1]] this|} in
   let source = {|the problem is this|} in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 11, "line": 1, "column": 12 },
@@ -192,18 +196,15 @@ is,pod|racing
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
-  [%expect_exact "->now.this.
-<-->is,pod|racing
-<-"]
-
-
+  [%expect_exact "->now.this.\n<-->is,pod|racing\n<-"]
 
 let%expect_test "shift_or_at_least_dont_get_stuck" =
   let template = ":[1]" in
   let source = "a" in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 0, "line": 1, "column": 1 },
@@ -228,7 +229,8 @@ let%expect_test "shift_or_at_least_dont_get_stuck" =
   let source = "aa" in
   let matches = all template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 0, "line": 1, "column": 1 },
@@ -249,17 +251,13 @@ let%expect_test "shift_or_at_least_dont_get_stuck" =
 ]|}]
 
 let%expect_test "nested_rewrite1" =
-  let source =
-    {|
+  let source = {|
       x x y strcpy(strcpy(dst1, src1), src2); blah blah XXX
-    |}
-  in
+    |} in
 
-  let template =
-    {|
+  let template = {|
       strcpy(:[1], :[2])
-    |}
-  in
+    |} in
 
   let matches = all template source in
   print_matches matches;
@@ -292,7 +290,8 @@ let%expect_test "nested_rewrite2" =
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
-  [%expect_exact {|for _, field := range fields.List {
+  [%expect_exact
+    {|for _, field := range fields.List {
         if field.Names != nil {
           for _, fieldName := range field.Names {
             stuff with fields and things
@@ -301,17 +300,13 @@ let%expect_test "nested_rewrite2" =
       }|}]
 
 let%expect_test "match_:[[1]]" =
-  let template =
-    {|
+  let template = {|
     :[[1]].next()
-    |}
-  in
-  let source =
-    {|
+    |} in
+  let source = {|
     col_names = reader.next()
     }
-    |}
-  in
+    |} in
   let rewrite_template = "next(:[1])" in
   all template source
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))

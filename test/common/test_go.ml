@@ -1,5 +1,4 @@
 open Core
-
 open Language
 open Matchers
 open Match
@@ -11,41 +10,36 @@ let run ?(rule = "where true") source match_template rewrite_template =
   let rule = Rule.create rule |> Or_error.ok_exn in
   Go.first ~configuration match_template source
   |> function
-  | Ok ({environment; _ } as result) ->
-    if Rule.(sat @@ apply rule environment) then
-      Rewrite.all ~source ~rewrite_template [result]
-      |> (fun x -> Option.value_exn x)
-      |> (fun { rewritten_source; _ } -> rewritten_source)    |> print_string
-    else
-      assert false
-  | Error _ ->
-    print_string rewrite_template
+  | Ok ({ environment; _ } as result) ->
+      if Rule.(sat @@ apply rule environment) then
+        Rewrite.all ~source ~rewrite_template [result]
+        |> (fun x -> Option.value_exn x)
+        |> (fun { rewritten_source; _ } -> rewritten_source)
+        |> print_string
+      else
+        assert false
+  | Error _ -> print_string rewrite_template
+
 
 let%expect_test "gosimple_s1000" =
-  let source =
-    {|
+  let source = {|
       select {
       case x := <-ch:
         fmt.Println(x)
       }
-    |}
-  in
+    |} in
 
-  let match_template =
-    {|
+  let match_template = {|
       select {
       case :[1] := :[2]:
         :[3]
       }
-    |}
-  in
+    |} in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       :[1] := :[2]
       :[3]
-    |}
-  in
+    |} in
   run source match_template rewrite_template;
   [%expect_exact {|
       x := <-ch
@@ -53,13 +47,11 @@ let%expect_test "gosimple_s1000" =
     |}]
 
 let%expect_test "gosimple_s1001" =
-  let source =
-    {|
+  let source = {|
       for i, x := range src {
         dst[i] = x
       }
-    |}
-  in
+    |} in
 
   let match_template =
     {|
@@ -69,13 +61,13 @@ let%expect_test "gosimple_s1001" =
     |}
   in
 
-  let rewrite_template =
-    {|
+  let rewrite_template = {|
       copy(:[dst_array], :[src_array])
-    |}
-  in
+    |} in
 
-  let rule = {|where :[index_define] == :[index_use], :[src_element_define] == :[src_element_use]|} in
+  let rule =
+    {|where :[index_define] == :[index_use], :[src_element_define] == :[src_element_use]|}
+  in
 
   run ~rule source match_template rewrite_template;
   [%expect_exact {|
@@ -83,17 +75,13 @@ let%expect_test "gosimple_s1001" =
     |}]
 
 let%expect_test "gosimple_s1003" =
-  let source =
-    {|
+  let source = {|
       if strings.Index(x, y) != -1 { ignore }
-    |}
-  in
+    |} in
 
-  let match_template =
-    {|
+  let match_template = {|
       if strings.:[1](x, y) != -1 { :[_] }
-    |}
-  in
+    |} in
 
   let rewrite_template = {|:[1]|} in
 

@@ -1,5 +1,4 @@
 open Core
-
 open Matchers
 open Rewriter
 
@@ -12,10 +11,10 @@ let format s =
   |> String.concat ~sep:"\n"
   |> String.chop_suffix_exn ~suffix:"\n"
 
+
 let configuration = Configuration.create ~match_kind:Fuzzy ()
 
-let all ?(configuration = configuration) template source =
-  C.all ~configuration ~template ~source
+let all ?(configuration = configuration) template source = C.all ~configuration ~template ~source
 
 let print_matches matches =
   List.map matches ~f:Match.to_yojson
@@ -23,26 +22,27 @@ let print_matches matches =
   |> Yojson.Safe.pretty_to_string
   |> print_string
 
+
 let%expect_test "comments_in_string_literals_should_not_be_treated_as_comments_by_fuzzy" =
   let source = {|"/*"(x)|} in
   let template = {|(:[1])|} in
   let rewrite_template = {|:[1]|} in
-  all template source
+  ( all template source
   |> Rewrite.all ~source ~rewrite_template
-  |> (function
-      | Some { rewritten_source; _ } -> print_string rewritten_source
-      | None -> print_string "BROKEN EXPECT");
+  |> function
+  | Some { rewritten_source; _ } -> print_string rewritten_source
+  | None -> print_string "BROKEN EXPECT" );
   [%expect_exact {|"/*"x|}]
 
 let%expect_test "comments_in_string_literals_should_not_be_treated_as_comments_by_fuzzy_go_raw" =
   let source = {|`//`(x)|} in
   let template = {|(:[1])|} in
   let rewrite_template = {|:[1]|} in
-  Go.all ~configuration ~template ~source
+  ( Go.all ~configuration ~template ~source
   |> Rewrite.all ~source ~rewrite_template
-  |> (function
-      | Some { rewritten_source; _ } -> print_string rewritten_source
-      | None -> print_string "BROKEN EXPECT");
+  |> function
+  | Some { rewritten_source; _ } -> print_string rewritten_source
+  | None -> print_string "BROKEN EXPECT" );
   [%expect_exact {|`//`x|}]
 
 let%expect_test "tolerate_unbalanced_stuff_in_string_literals" =
@@ -50,7 +50,8 @@ let%expect_test "tolerate_unbalanced_stuff_in_string_literals" =
   let source = {|"("|} in
   let matches = all ~configuration template source in
   print_matches matches;
-  [%expect_exact {|[
+  [%expect_exact
+    {|[
   {
     "range": {
       "start": { "offset": 0, "line": 1, "column": 1 },
@@ -111,8 +112,8 @@ let%expect_test "match_string_literals" =
   |> print_string;
   [%expect_exact {|"(" "a""a" "(" |}]
 
-(* this tests special functionality in non-literal hole parser
-   but which must still ignore unbalanced delims within strings *)
+(* this tests special functionality in non-literal hole parser but which must still ignore
+   unbalanced delims within strings *)
 let%expect_test "match_string_literals" =
   let source = {|"(" match "(""(" this "(" |} in
   let match_template = {|match :[1] this|} in
@@ -173,7 +174,8 @@ let%expect_test "base_literal_matching" =
   |> print_string;
   [%expect_exact {|hello world|}]
 
-(* complex test: basically, we are checking that the inside of this literal is only matched by the val b part *)
+(* complex test: basically, we are checking that the inside of this literal is only matched by the
+   val b part *)
 let%expect_test "base_literal_matching" =
   let source = {|val a = "class = ${String::class}" val b = "not $a"|} in
   let match_template = {|":[x]$:[[y]]"|} in
@@ -293,7 +295,6 @@ let%expect_test "rewrite_string_literals_8" =
   |> print_string;
   [%expect_exact {|match \'|}]
 
-
 let%expect_test "go_raw_string_literals" =
   let source =
     {|
@@ -311,7 +312,8 @@ let%expect_test "go_raw_string_literals" =
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
-  [%expect_exact {|
+  [%expect_exact
+    {|
        x = x
        y = multi-line
             raw str(ing literal
@@ -340,7 +342,6 @@ let%expect_test "match_string_literals" =
   |> print_string;
   [%expect_exact {|`(` `(``(` `(` |}]
 
-
 let%expect_test "go_raw_string_literals" =
   let source =
     {|
@@ -358,7 +359,8 @@ let%expect_test "go_raw_string_literals" =
   |> (fun matches -> Option.value_exn (Rewrite.all ~source ~rewrite_template matches))
   |> (fun { rewritten_source; _ } -> rewritten_source)
   |> print_string;
-  [%expect_exact {|
+  [%expect_exact
+    {|
        x = x
        y = multi-line
             raw "str"(ing literal
@@ -370,43 +372,42 @@ let%expect_test "regression_matching_kubernetes" =
   let source = {|"\n" y = 5|} in
   let template = {|y = :[1]|} in
   let rewrite_template = {|:[1]|} in
-  Go.all ~configuration ~template ~source
+  ( Go.all ~configuration ~template ~source
   |> Rewrite.all ~source ~rewrite_template
-  |> (function
-      | Some { rewritten_source; _ } -> print_string rewritten_source
-      | None -> print_string "BROKEN EXPECT");
+  |> function
+  | Some { rewritten_source; _ } -> print_string rewritten_source
+  | None -> print_string "BROKEN EXPECT" );
   [%expect_exact {|"\n" 5|}]
-
 
 let%expect_test "match_escaped_any_char" =
   let source = {|printf("hello world\n");|} in
   let template = {|printf(":[1]");|} in
   let rewrite_template = {|:[1]|} in
-  Go.all ~configuration ~template ~source
+  ( Go.all ~configuration ~template ~source
   |> Rewrite.all ~source ~rewrite_template
-  |> (function
-      | Some { rewritten_source; _ } -> print_string rewritten_source
-      | None -> print_string "BROKEN EXPECT");
+  |> function
+  | Some { rewritten_source; _ } -> print_string rewritten_source
+  | None -> print_string "BROKEN EXPECT" );
   [%expect_exact {|hello world\n|}]
 
 let%expect_test "match_escaped_escaped" =
   let source = {|printf("hello world\n\\");|} in
   let template = {|printf(":[1]");|} in
   let rewrite_template = {|:[1]|} in
-  Go.all ~configuration ~template ~source
+  ( Go.all ~configuration ~template ~source
   |> Rewrite.all ~source ~rewrite_template
-  |> (function
-      | Some { rewritten_source; _ } -> print_string rewritten_source
-      | None -> print_string "BROKEN EXPECT");
+  |> function
+  | Some { rewritten_source; _ } -> print_string rewritten_source
+  | None -> print_string "BROKEN EXPECT" );
   [%expect_exact {|hello world\n\\|}]
 
 let%expect_test "match_escaped_escaped" =
   let source = {|printf("hello world\n\");|} in
   let template = {|printf(":[1]");|} in
   let rewrite_template = {|:[1]|} in
-  Go.all ~configuration ~template ~source
+  ( Go.all ~configuration ~template ~source
   |> Rewrite.all ~source ~rewrite_template
-  |> (function
-      | Some { rewritten_source; _ } -> print_string rewritten_source
-      | None -> print_string "EXPECT SUCCESS");
+  |> function
+  | Some { rewritten_source; _ } -> print_string rewritten_source
+  | None -> print_string "EXPECT SUCCESS" );
   [%expect_exact {|EXPECT SUCCESS|}]
