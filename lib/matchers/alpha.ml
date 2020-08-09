@@ -1041,44 +1041,50 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     in
     first' shift p source
 
-  let all ?configuration ~template ~source:original_source : Match.t list =
-    let open Or_error in
+  let rec all ?configuration ~template ~source:original_source : Match.t list =
     configuration_ref := Option.value configuration ~default:!configuration_ref;
     let make_result = function
       | Ok ok -> ok
       | Error _ -> []
     in
     make_result @@ begin
-      to_template template >>= fun p ->
-      let p =
-        if String.is_empty template then
-          MParser.(eof >> return Unit)
-        else
-          p
-      in
-      let rec aux acc shift =
-        match first' shift p original_source with
-        | Ok ({range = { match_start; match_end; _ }; _} as result) ->
-          let shift = match_end.offset in
-          let shift, matched =
-            if match_start.offset = match_end.offset then
-              match_start.offset + 1, "" (* advance one if the matched content is the empty string *)
-            else
-              shift, extract_matched_text original_source match_start match_end
-          in
-          if debug then Format.printf "Extracted matched: %s" matched;
-          let result = { result with matched } in
-          if shift >= String.length original_source then
-            result :: acc
-          else
-            aux (result :: acc) shift
-        | Error _ -> acc
-      in
-      let matches = aux [] 0 |> List.rev in
-      (* TODO(RVT): reintroduce nested matches *)
-      let compute_nested_matches matches = matches in
-      let matches = compute_nested_matches matches in
-      return matches
+      Or_error.bind (to_template template)
+        ~f:(fun p ->
+            let p =
+              if String.is_empty template then
+                MParser.(eof >> return Unit)
+              else
+                p
+            in
+            let rec aux acc shift =
+              match first' shift p original_source with
+              | Ok ({range = { match_start; match_end; _ }; _} as result) ->
+                let shift = match_end.offset in
+                let shift, matched =
+                  if match_start.offset = match_end.offset then
+                    match_start.offset + 1, "" (* advance one if the matched content is the empty string *)
+                  else
+                    shift, extract_matched_text original_source match_start match_end
+                in
+                if debug then Format.printf "Extracted matched: %s" matched;
+                let result = { result with matched } in
+                if shift >= String.length original_source then
+                  result :: acc
+                else
+                  aux (result :: acc) shift
+              | Error _ -> acc
+            in
+            let matches = aux [] 0 in
+            let matches =
+              List.fold matches ~init:[] ~f:(fun acc ({ matched; _ } as original) ->
+                  (*Format.printf "Nested on template %S and source %S" template matched;*)
+                  let _nested = all ?configuration ~template ~source:matched in
+                  original :: acc
+                )
+            in
+            Format.printf "Done@.";
+            let matches = List.rev matches in
+            Ok matches)
     end
 
   let set_rewrite_template _ = () (* Unused in alpha matcher *)
