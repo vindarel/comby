@@ -1089,11 +1089,12 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
             result :: acc
           else
             aux (result :: acc) shift
-        | Error _ -> acc
+        | Error _ ->
+          acc
       in
       let matches = aux [] 0 |> List.rev in
       let nested_matches = compute_nested_matches ?configuration template matches in
-      return (matches @ nested_matches)
+      return (nested_matches @ matches)
     end
   and compute_nested_matches ?configuration template matches =
     let rec aux acc matches =
@@ -1104,28 +1105,24 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
             let source_opt = Environment.lookup environment v in
             match source_opt with
             | Some source ->
-              Format.printf "Running on %S@." source;
               let nested_matches =
                 match first ?configuration template source with
                 | Ok { matched; _ } when String.(matched <> source) ->
                   if String.(matched = "") && String.length source > 1 then begin
-                    Format.printf "Descending, matched %S will advance 1 <> %S source@." matched source;
                     let matches = all ?configuration ~template ~source in
-                    (*Format.printf "New matches: %a" Match.pp (None, matches);*)
-                    acc @ matches
+                    matches @ acc
                   end
                   else
                     []
                 (* TODO: fix up ranges. *)
-                | Ok { matched; _ } ->
-                  Format.printf "Not descending: matched: %S <-> %S source@." matched source;
+                | Ok _ ->
                   []
                 | Error _ ->
-                  Format.printf "Not descending: no match@.";
-                  [] (* no match or matches self *)
+                  []
               in
-              nested_matches
-            | _ -> acc) @ aux acc rest
+              acc @ nested_matches
+            | _ -> acc)
+        @ aux acc rest
     in
     aux [] matches
 
