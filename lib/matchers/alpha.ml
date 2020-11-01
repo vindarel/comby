@@ -1057,7 +1057,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     in
     first' shift p source
 
-  let all ?configuration ~template ~source:original_source : Match.t list =
+  let rec all ?configuration ~template ~source:original_source : Match.t list =
     let open Or_error in
     depth := (-1);
     configuration_ref := Option.value configuration ~default:!configuration_ref;
@@ -1092,11 +1092,42 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
         | Error _ -> acc
       in
       let matches = aux [] 0 |> List.rev in
-      (* TODO(RVT): reintroduce nested matches *)
-      let compute_nested_matches matches = matches in
-      let matches = compute_nested_matches matches in
-      return matches
+      let nested_matches = compute_nested_matches ?configuration template matches in
+      return (matches @ nested_matches)
     end
+  and compute_nested_matches ?configuration template matches =
+    let rec aux acc matches =
+      match (matches : Match.t list) with
+      | [] -> acc
+      | { environment; _ }::rest ->
+        List.fold ~init:acc (Environment.vars environment) ~f:(fun acc v ->
+            let source_opt = Environment.lookup environment v in
+            match source_opt with
+            | Some source ->
+              Format.printf "Running on %S@." source;
+              let nested_matches =
+                match first ?configuration template source with
+                | Ok { matched; _ } when String.(matched <> source) ->
+                  if String.(matched = "") && String.length source > 1 then begin
+                    Format.printf "Descending, matched %S will advance 1 <> %S source@." matched source;
+                    let matches = all ?configuration ~template ~source in
+                    (*Format.printf "New matches: %a" Match.pp (None, matches);*)
+                    acc @ matches
+                  end
+                  else
+                    []
+                (* TODO: fix up ranges. *)
+                | Ok { matched; _ } ->
+                  Format.printf "Not descending: matched: %S <-> %S source@." matched source;
+                  []
+                | Error _ ->
+                  Format.printf "Not descending: no match@.";
+                  [] (* no match or matches self *)
+              in
+              nested_matches
+            | _ -> acc) @ aux acc rest
+    in
+    aux [] matches
 
   let set_rewrite_template _ = () (* Unused in alpha matcher *)
 end
