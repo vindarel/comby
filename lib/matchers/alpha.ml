@@ -1057,7 +1057,7 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
     in
     first' shift p source
 
-  let all ?configuration ~template ~source:original_source : Match.t list =
+  let rec all ?configuration ~template ~source:original_source : Match.t list =
     let open Or_error in
     depth := (-1);
     configuration_ref := Option.value configuration ~default:!configuration_ref;
@@ -1089,14 +1089,65 @@ module Make (Syntax : Syntax.S) (Info : Info.S) = struct
             result :: acc
           else
             aux (result :: acc) shift
-        | Error _ -> acc
+        | Error _ ->
+          acc
       in
       let matches = aux [] 0 |> List.rev in
-      (* TODO(RVT): reintroduce nested matches *)
-      let compute_nested_matches matches = matches in
-      let matches = compute_nested_matches matches in
-      return matches
+      let nested_matches = compute_nested_matches ?configuration template matches in
+      return (nested_matches @ matches)
     end
+  and compute_nested_matches ?configuration template matches =
+    let rec aux acc matches =
+      match (matches : Match.t list) with
+      | [] -> acc
+      | { environment; _ }::rest ->
+        List.fold ~init:acc (Environment.vars environment) ~f:(fun acc v ->
+            let source_opt = Environment.lookup environment v in
+            match source_opt with
+            | Some source ->
+              let nested_matches =
+                match first ?configuration template source with
+                | Ok { matched; range = { match_start = ms; _ }; _ } when String.(matched <> source) ->
+                  if String.(matched = "") && String.length source > 1 then
+                    let matches = all ?configuration ~template ~source in
+                    List.map matches ~f:(fun m ->
+                        let environment =
+                          List.fold (Environment.vars m.environment) ~init:m.environment ~f:(fun env var ->
+                              let open Option in
+                              let updated : environment option =
+                                Environment.lookup_range env var
+                                >>| fun r ->
+                                let range = {
+                                  match_start =
+                                    { r.match_start with offset = ms.offset + r.match_start.offset -1 } ;
+                                  match_end =
+                                    { r.match_end with offset = ms.offset + r.match_end.offset -1 }
+                                }
+                                in
+                                Environment.update_range env var range
+                              in
+                              match updated with
+                              | None -> env
+                              | Some env -> env)
+                        in
+                        let range = {
+                          match_start =
+                            { m.range.match_start with offset = ms.offset + m.range.match_start.offset -1 } ;
+                          match_end =
+                            { m.range.match_end with offset = ms.offset + m.range.match_end.offset -1 }
+                        }
+                        in
+                        { m with range; environment })
+                  else
+                    []
+                | _ ->
+                  []
+              in
+              acc @ nested_matches
+            | _ -> acc)
+        @ aux acc rest
+    in
+    aux [] matches
 
   let set_rewrite_template _ = () (* Unused in alpha matcher *)
 end
