@@ -690,8 +690,10 @@ module Julia = struct
 
   module Syntax = struct
     include Generic.Syntax
-    
-    Dyck.Syntax.user_defined_delimiters @
+
+    let user_defined_delimiters =
+      Generic.Syntax.user_defined_delimiters
+      @
       [ "if", "end"
       ; "for", "end"
       ; "while", "end"
@@ -700,7 +702,7 @@ module Julia = struct
       ; "begin", "end"
       ; "let", "end"
       ]
-      
+
     let comments =
       [ Nested_multiline ("#=", "=#")
       ; Until_newline "#"
