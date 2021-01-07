@@ -7,6 +7,9 @@ let debug =
   Sys.getenv "DEBUG_COMBY"
   |> Option.is_some
 
+let uuid_for_id_counter = ref 0
+let uuid_for_sub_counter = ref 0
+
 (** Parse the first :[id(label)] label encountered in the template. *)
 let parse_first_label template =
   let label = take_while (function | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '_' -> true | _ -> false) in
@@ -32,9 +35,20 @@ let substitute_fresh template =
       match String.Table.find label_table label with
       | Some id -> id
       | None ->
-        let uuid = Uuid_unix.(Fn.compose Uuid.to_string create ()) in
-        let id = String.suffix uuid 12 in
-        String.Table.add_exn label_table ~key:label ~data:id;
+        let id =
+          if false then
+            (
+              let uuid = Uuid_unix.(Fn.compose Uuid.to_string create ()) in
+              String.suffix uuid 12
+            )
+          else
+            (
+              uuid_for_id_counter := !uuid_for_id_counter + 1;
+              Format.sprintf "%d" !uuid_for_id_counter
+            )
+        in
+        if String.(label <> "") then
+          String.Table.add_exn label_table ~key:label ~data:id;
         id
     in
     let pattern = ":[id(" ^ label ^ ")]" in
