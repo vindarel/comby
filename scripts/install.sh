@@ -3,8 +3,10 @@
 set -ue
 # set -x
 
-RELEASE_VERSION="0.x.0"
-RELEASE_TAG="0.x.0"
+# RELEASE_VERSION="0.x.0"
+RELEASE_VERSION="1.0.0"
+# RELEASE_TAG="0.x.0"
+RELEASE_TAG="1.0.0"
 RELEASE_URL="https://github.com/comby-tools/comby/releases"
 
 INSTALL_DIR=/usr/local/bin
